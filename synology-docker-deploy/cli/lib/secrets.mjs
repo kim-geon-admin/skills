@@ -1,7 +1,8 @@
 // secrets - GitHub 저장소에 NAS 접속 정보를 등록합니다.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
-import { SECRET_NAMES, UserError, capture, has, keyPathOf, knownHostsPath, loadConfig } from './core.mjs';
+import { SECRET_NAMES, UserError, capture, keyPathOf, knownHostsPath, loadConfig } from './core.mjs';
+import { ensureGitHubLogin, ensureWorkflowScope } from './github.mjs';
 import { badItem, bold, confirm, cyan, detail, dim, heading, note, okItem, panel, skipItem, warnItem } from './ui.mjs';
 
 function setSecret(name, value) {
@@ -11,9 +12,10 @@ function setSecret(name, value) {
 
 export async function secretsCommand(rl) {
   const config = loadConfig();
-  if (!has('gh')) throw new UserError('gh(GitHub 명령줄 도구)가 필요합니다. https://cli.github.com 에서 설치한 뒤 "gh auth login" 을 실행하세요.');
-  const auth = capture('gh', ['auth', 'status']);
-  if (auth.code !== 0) throw new UserError('GitHub에 로그인되어 있지 않습니다. "gh auth login" 을 먼저 실행하세요.');
+  const state = await ensureGitHubLogin(rl);
+  if (!state.installed) throw new UserError('gh(GitHub 명령줄 도구)를 설치한 뒤 다시 실행해 주세요.');
+  if (!state.loggedIn) throw new UserError('GitHub 로그인이 필요합니다. 다시 실행하면 로그인 화면을 띄워 드립니다.');
+  await ensureWorkflowScope(rl, state);
 
   const repo = capture('gh', ['repo', 'view', '--json', 'nameWithOwner,visibility', '--jq', '.nameWithOwner + " (" + .visibility + ")"']);
   const keyPath = keyPathOf(config);

@@ -5,6 +5,7 @@ import {
   COMPOSE_PATH, CONFIG_PATH, DEPLOY_SCRIPT_PATH, ENV_PATH, GATE_SCRIPT_PATH, SECRET_NAMES, WORKFLOW_PATH, ZERO_TAG,
   capture, deployKeyProbe, has, keyPathOf, knownHostsPath, loadConfig, nasDir, readIfExists, remote, usesAdminKey
 } from './core.mjs';
+import { githubState } from './github.mjs';
 import { badItem, bold, cyan, detail, dim, heading, note, okItem, panel, skipItem, warnItem } from './ui.mjs';
 
 export async function doctorCommand(rl, options = {}) {
@@ -30,11 +31,12 @@ export async function doctorCommand(rl, options = {}) {
     if (has(command)) okItem(`${label} (${command})`);
     else fail(`${label}(${command})을 찾을 수 없습니다`, '', 'Git Bash에서 실행하거나 OpenSSH를 설치해 주세요.');
   }
-  if (has('gh')) {
-    const auth = capture('gh', ['auth', 'status']);
-    if (auth.code === 0) okItem('GitHub 로그인 상태');
-    else fail('GitHub에 로그인되어 있지 않습니다', '', '"gh auth login" 을 실행하세요.');
-  } else soft('gh(GitHub 명령줄 도구)가 없습니다', '', 'Secret 등록과 상태 확인이 제한됩니다. https://cli.github.com');
+  const github = githubState();
+  if (!github.installed) soft('gh(GitHub 명령줄 도구)가 없습니다', '', 'Secret 등록과 상태 확인이 제한됩니다. https://cli.github.com');
+  else if (github.loggedIn) {
+    okItem('GitHub 로그인 상태', github.account ? `계정 ${github.account}` : '');
+    if (!github.scopes.includes('workflow')) soft('토큰에 workflow 권한이 없습니다', '', '워크플로 파일 푸시가 거부되면 "nas-deploy secrets" 에서 권한을 추가할 수 있습니다.');
+  } else fail('GitHub에 로그인되어 있지 않습니다', '', '"nas-deploy secrets" 를 실행하면 로그인 화면을 띄워 드립니다.');
   if (has('docker')) okItem('Docker (compose 파일 검사에 사용)');
   else skipItem('Docker 없음', 'compose 파일 문법 검사는 건너뜁니다');
 
