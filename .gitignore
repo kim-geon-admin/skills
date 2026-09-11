@@ -1,0 +1,3 @@
+# Per-machine real values (domains, ports, account names) stay local.
+local-env.md
+**/local-env.md

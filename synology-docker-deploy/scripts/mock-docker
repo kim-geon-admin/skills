@@ -1,0 +1,62 @@
+#!/bin/bash
+# Minimal docker CLI stand-in for exercising deploy.sh state handling.
+# Env: MOCK_PROJECT, MOCK_IMAGE_PREFIX, MOCK_SERVICES, MOCK_HEALTH_SERVICE (service with a
+# healthcheck), FAIL_TAG (that tag's health service turns unhealthy), PULL_FAIL (any pull fails).
+M=/mock
+mkdir -p "$M/containers"; touch "$M/images"
+echo "docker $*" >> "$M/calls"
+case "$1" in
+  info) [[ "${2:-}" == --format ]] && echo /volume1/@docker; exit 0 ;;
+  compose)
+    shift
+    [[ "$1" == version ]] && exit 0
+    while [[ "$1" == --project-directory || "$1" == --env-file || "$1" == -f ]]; do shift 2; done
+    cmd=$1; shift
+    case "$cmd" in
+      config) [[ -n "${IMAGE_TAG:-}" ]] ;;
+      ps)
+        svc=${*: -1}; c="$M/containers/$MOCK_PROJECT-$svc-1"
+        [[ -d "$c" && "$(cat "$c/project")" == "$MOCK_PROJECT" ]] && echo "$MOCK_PROJECT-$svc-1"
+        exit 0 ;;
+      stop)
+        for c in "$M"/containers/*; do
+          [[ -d "$c" && "$(cat "$c/project")" == "$MOCK_PROJECT" ]] && echo exited > "$c/status"
+        done
+        exit 0 ;;
+      up)
+        for svc in $MOCK_SERVICES; do
+          c="$M/containers/$MOCK_PROJECT-$svc-1"; want="$MOCK_IMAGE_PREFIX-$svc:$IMAGE_TAG"
+          grep -qx "$want" "$M/images" || { echo "mock: image $want missing" >&2; exit 1; }
+          mkdir -p "$c"
+          [[ "$(cat "$c/image" 2>/dev/null)" != "$want" ]] && { echo "$want" > "$c/image"; echo 0 > "$c/restarts"; }
+          echo running > "$c/status"; echo "$MOCK_PROJECT" > "$c/project"
+          if [[ "$svc" != "$MOCK_HEALTH_SERVICE" ]]; then echo none > "$c/health"
+          elif [[ "$IMAGE_TAG" == "${FAIL_TAG:-}" ]]; then echo unhealthy > "$c/health"
+          else echo healthy > "$c/health"; fi
+        done ;;
+      logs) echo "(mock logs)" ;;
+    esac ;;
+  inspect)
+    if [[ "$2" == -f ]]; then fmt=$3; name=$4; else fmt=''; name=$2; fi
+    c="$M/containers/$name"; [[ -d "$c" ]] || exit 1
+    case "$fmt" in
+      *State.Health*) cat "$c/health" ;;
+      *State.Status*) cat "$c/status" ;;
+      *Config.Image*) cat "$c/image" ;;
+      *RestartCount*) cat "$c/restarts" ;;
+      *compose.project*) cat "$c/project" ;;
+      *) echo '{}' ;;
+    esac ;;
+  login) cat > "$M/login-stdin"; exit 0 ;;
+  logout) exit 0 ;;
+  pull)
+    ref=${*: -1}
+    [[ -n "${PULL_FAIL:-}" ]] && { echo "mock: pull denied" >&2; exit 1; }
+    grep -qx "$ref" "$M/images" || echo "$ref" >> "$M/images" ;;
+  image)
+    case "$2" in
+      inspect) grep -qx "$3" "$M/images" ;;
+      ls) cat "$M/images" ;;
+      rm) grep -vx "$3" "$M/images" > "$M/images.tmp"; mv "$M/images.tmp" "$M/images" ;;
+    esac ;;
+esac

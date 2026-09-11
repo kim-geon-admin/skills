@@ -1,0 +1,2 @@
+# Shell scripts run on Linux (Synology NAS, CI); CRLF would break them.
+*.sh text eol=lf
