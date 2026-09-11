@@ -51,6 +51,33 @@ node ~/.claude/skills/synology-docker-deploy/cli/nas-deploy.mjs help
 | `env` | `.env`를 NAS에 반영(CRLF·제어문자 정리)하고 재배포 실행 |
 | `status` | 최근 실행 결과, 배포된 버전, 컨테이너 상태, 마지막 배포 로그 |
 
+### 지원 범위와 제한 (언어·프레임워크)
+
+언어나 프레임워크 자체는 가리지 않는다. **"Dockerfile로 이미지를 만들 수 있고, 컨테이너가 계속 떠 있는 프로젝트"**면 된다.
+빌드 방법은 전부 Dockerfile 안에서 처리하므로 CLI가 아는 것은 이미지 이름·포트·상태 확인 방법뿐이다.
+
+| 프로젝트 | 되는가 | 설정에서 주의할 점 |
+| --- | --- | --- |
+| 정적 HTML/CSS/JS (nginx) | O | 포트는 이미지 설정대로(예: 8080), 상태 확인 `wget`. `read_only`면 `/var/cache/nginx`, `/var/run` tmpfs 필요 |
+| Next.js / Node / Express | O | `output: 'standalone'` 권장, 포트 3000, 상태 확인 `node` |
+| Python (FastAPI, Django, Flask) | O | gunicorn/uvicorn로 실행. slim 이미지엔 curl·wget이 없으니 상태 확인은 `none`이거나 Dockerfile에 설치 |
+| Java / Spring Boot | O | 멀티스테이지로 jar 빌드 후 JRE 이미지에 복사. NAS 메모리 여유 확인 |
+| JSP / Servlet (Tomcat) | O | `tomcat` 이미지에 war 복사. 포트 8080, 상태 확인 경로는 앱 컨텍스트에 맞춰 지정 |
+| PHP / Laravel | O | php-fpm + nginx를 한 이미지에 넣거나 서비스 2개로 구성 |
+| Go / Rust | O | 정적 바이너리 + `scratch`/`distroless`면 상태 확인은 `none` (셸·wget 없음) |
+| 백그라운드 워커, 크론 | O | 포트·헬스체크 없이 서비스만 추가. 배포 스크립트는 "실행 중"만 확인 |
+| 데이터베이스(Postgres 등) | 가능하지만 권장하지 않음 | 이미지가 CI에서 빌드되지 않으므로 compose에 직접 추가하고 백업 파일을 `BACKUP_FILES`에 넣을 것 |
+
+**공통 제한**
+
+- **Dockerfile이 반드시 있어야 한다.** CLI는 Dockerfile을 만들어 주지 않는다(경로만 물어본다).
+- **linux/amd64 전용.** 워크플로가 amd64로 빌드한다. ARM 기반 Synology(예: 일부 J 시리즈)는 `platforms` 수정 필요.
+- **한 프로젝트 = compose 스택 하나.** 서비스를 여러 개 둘 수 있지만, 두 번째 서비스부터는 compose에 볼륨·환경 변수를 직접 적어야 한다.
+- **상태 확인 명령은 이미지 안에 있어야 한다.** 없는 명령을 고르면 컨테이너가 계속 "이상"으로 보여 롤백된다. 확실하지 않으면 `none`.
+- **`read_only: true`가 기본.** 런타임이 쓰기를 요구하면(nginx 캐시, PHP 세션, 로그 파일) 해당 경로를 tmpfs로 열거나 볼륨을 붙여야 한다.
+- **레지스트리는 GHCR 고정.** Docker Hub 등 다른 레지스트리는 워크플로와 배포 스크립트를 손봐야 한다.
+- **빌드는 GitHub 러너에서 한다.** 유료 러너 없이 큰 이미지를 만들면 시간이 오래 걸린다(캐시는 켜져 있음).
+
 ### 여러 프로젝트에서 쓰기
 
 CLI는 특정 프로젝트에 묶이지 않는다. **실행한 폴더의 설정**(`infra/synology/deploy.config.json`)을 읽으므로,

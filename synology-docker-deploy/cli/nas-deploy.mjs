@@ -51,7 +51,12 @@ function usage() {
 
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
-  const options = { skipNas: rest.includes('--skip-nas') };
+  const fromIndex = rest.indexOf('--from');
+  const options = {
+    skipNas: rest.includes('--skip-nas'),
+    yes: rest.includes('--yes'),
+    from: fromIndex >= 0 ? rest[fromIndex + 1] : null
+  };
   if (!command || command === 'help' || command === '--help' || command === '-h') {
     usage();
     return;
@@ -72,7 +77,7 @@ async function main() {
   banner();
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
-    if (command === 'init') await initCommand(rl);
+    if (command === 'init') await initCommand(rl, options);
     else if (command === 'login') await loginCommand(rl);
     else if (command === 'key') await keyCommand(rl);
     else if (command === 'nas') await nasCommand(rl);

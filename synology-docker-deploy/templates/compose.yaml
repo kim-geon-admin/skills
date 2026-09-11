@@ -25,10 +25,4 @@ services:
       - PORT=__CONTAINER_PORT__
     volumes:
       - ${DATA_DIR:?set DATA_DIR in .env}:/data
-    # Uses node's built-in fetch; swap for wget/curl if the image is not node-based.
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:__CONTAINER_PORT__/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
+__HEALTHCHECK__

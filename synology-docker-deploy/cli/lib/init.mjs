@@ -23,9 +23,36 @@ function buildWorkflow(config) {
   text = text.replaceAll('ghcr.io/__GHCR_OWNER__/__PROJECT__', imagePrefix(config));
   text = text.replace('service: [app]', `service: [${config.services.map((service) => service.name).join(', ')}]`);
   text = text.replace('file: __DOCKERFILE__', `file: ${config.dockerfile}`);
-  const testSteps = config.test.map((command) => `      - run: ${command}`).join('\n');
+
+  // Node 계열 명령이 없으면 Node/pnpm 준비 단계는 빼서 다른 언어에서도 그대로 동작하게 합니다.
+  const usesNode = config.test.some((command) => /^(pnpm|npm|npx|node|yarn)\b/.test(command));
+  if (!usesNode) {
+    text = text.replace(/\n      - uses: actions\/setup-node@[^\n]*\n        with:\n          node-version: 22\n      - uses: pnpm\/action-setup@[^\n]*\n        with:\n          cache: true/, '');
+  }
+  const testSteps = config.test.length
+    ? config.test.map((command) => `      - run: ${command}`).join('\n')
+    : '      - run: echo "이 프로젝트에는 배포 전 검사 명령이 없습니다"';
   text = text.replace('      - run: pnpm install --frozen-lockfile\n      - run: pnpm typecheck\n      - run: pnpm test', testSteps);
   return text;
+}
+
+// 이미지 안에 있는 명령으로 상태를 확인합니다. 없는 명령을 쓰면 컨테이너가 계속 "이상"으로 표시됩니다.
+function healthcheckBlock(config) {
+  const url = `http://127.0.0.1:${config.containerPort}${config.healthPath}`;
+  const command = {
+    node: `["CMD", "node", "-e", "fetch('${url}').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]`,
+    wget: `["CMD", "wget", "-q", "-O", "-", "${url}"]`,
+    curl: `["CMD", "curl", "-fsS", "${url}"]`
+  }[config.healthCheck];
+  if (!command) return '    # 상태 확인 명령 없음: 컨테이너가 실행 중인지만 확인합니다.';
+  return [
+    '    healthcheck:',
+    `      test: ${command}`,
+    '      interval: 10s',
+    '      timeout: 5s',
+    '      retries: 3',
+    '      start_period: 30s'
+  ].join('\n');
 }
 
 function buildCompose(config) {
@@ -35,6 +62,7 @@ function buildCompose(config) {
   text = text.replaceAll('__GHCR_OWNER__', config.owner);
   text = text.replaceAll('__HOST_PORT__', String(config.hostPort));
   text = text.replaceAll('__CONTAINER_PORT__', String(config.containerPort));
+  text = text.replace('__HEALTHCHECK__', healthcheckBlock(config));
   text = text.replace('  app:\n', `  ${first.name}:\n`);
   text = text.replace(`${imagePrefix(config)}-app:`, `${imagePrefix(config)}-${first.name}:`);
   const extra = rest
@@ -122,12 +150,20 @@ async function askConfig(rl, previous) {
   detail('NAS 안에서만 열리는 포트입니다. DSM 역방향 프록시가 이 포트로 연결합니다. 다른 프로젝트와 겹치지 않게 하세요.');
   const hostPort = await ask(rl, 'NAS 내부 포트', String(previous?.hostPort ?? 3100));
 
-  heading('4. 테스트 명령');
+  heading('4. 상태 확인(헬스 체크)');
+  detail('배포 뒤 앱이 정상인지 확인하는 방법입니다. 이미지 안에 실제로 있는 명령을 골라야 합니다.');
+  detail('node = Node 이미지, wget = alpine/nginx 계열, curl = curl이 설치된 이미지, none = 실행 여부만 확인');
+  const healthCheck = (await ask(rl, '확인 방법 (node/wget/curl/none)', previous?.healthCheck ?? 'none')).toLowerCase();
+  const healthPath = ['node', 'wget', 'curl'].includes(healthCheck)
+    ? await ask(rl, '확인할 주소 경로', previous?.healthPath ?? '/health')
+    : (previous?.healthPath ?? '/health');
+
+  heading('5. 테스트 명령');
   detail('배포 전에 GitHub에서 실행할 명령입니다. 이 단계가 실패하면 NAS로 배포되지 않습니다.');
   const test = (await ask(rl, '명령 목록(쉼표로 구분)', (previous?.test ?? ['pnpm install --frozen-lockfile', 'pnpm typecheck', 'pnpm test']).join(', ')))
     .split(',').map((command) => command.trim()).filter(Boolean);
 
-  heading('5. NAS 접속 정보');
+  heading('6. NAS 접속 정보');
   detail('GitHub Actions와 이 도구가 접속할 주소입니다.');
   const host = await ask(rl, 'NAS 주소', previous?.nas?.host ?? '');
   const port = await ask(rl, 'SSH 포트', String(previous?.nas?.port ?? 22));
@@ -137,7 +173,7 @@ async function askConfig(rl, previous) {
   const deployUser = await ask(rl, '배포 전용 계정', previous?.nas?.deployUser ?? 'gh-deploy');
   const dir = await ask(rl, 'NAS 배포 폴더', previous?.nas?.dir ?? `/volume1/docker/${project}`);
 
-  heading('6. 백업');
+  heading('7. 백업');
   detail('새 버전으로 바꾸기 전에 복사해 둘 파일입니다. 데이터베이스 파일이 있으면 적어 주세요. 없으면 그냥 Enter.');
   const backupFiles = (await ask(rl, '백업할 파일(쉼표로 구분)', (previous?.backupFiles ?? []).join(', ')))
     .split(',').map((file) => file.trim()).filter(Boolean);
@@ -149,6 +185,8 @@ async function askConfig(rl, previous) {
     dockerfile,
     containerPort: Number(containerPort),
     hostPort: Number(hostPort),
+    healthCheck: ['node', 'wget', 'curl'].includes(healthCheck) ? healthCheck : 'none',
+    healthPath,
     test,
     nas: { host, port: Number(port), adminUser, deployUser, dir },
     keyPath: previous?.keyPath ?? `~/.ssh/${project}_deploy`,
@@ -156,7 +194,33 @@ async function askConfig(rl, previous) {
   };
 }
 
-export async function initCommand(rl) {
+// 질문 없이 설정 파일(JSON)로 바로 만들 때 쓰는 기본값입니다.
+function withDefaults(input) {
+  const project = input.project ?? path.basename(process.cwd()).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+  return {
+    project,
+    owner: (input.owner ?? '').toLowerCase(),
+    services: (input.services ?? [{ name: 'app' }]).map((service) => (typeof service === 'string' ? { name: service } : service)),
+    dockerfile: input.dockerfile ?? './Dockerfile',
+    containerPort: Number(input.containerPort ?? 3000),
+    hostPort: Number(input.hostPort ?? 3100),
+    healthCheck: ['node', 'wget', 'curl'].includes(input.healthCheck) ? input.healthCheck : 'none',
+    healthPath: input.healthPath ?? '/health',
+    test: input.test ?? [],
+    nas: {
+      host: input.nas?.host ?? '',
+      port: Number(input.nas?.port ?? 22),
+      adminUser: input.nas?.adminUser ?? '',
+      deployUser: input.nas?.deployUser ?? 'gh-deploy',
+      dir: input.nas?.dir ?? `/volume1/docker/${project}`,
+      adminKey: input.nas?.adminKey ?? null
+    },
+    keyPath: input.keyPath ?? `~/.ssh/${project}_deploy`,
+    backupFiles: input.backupFiles ?? []
+  };
+}
+
+export async function initCommand(rl, options = {}) {
   const previous = loadConfig({ required: false });
   panel('init - 저장소에 배포 파일 만들기', [
     '이 명령은 내 컴퓨터의 저장소 폴더에만 파일을 만듭니다.',
@@ -165,7 +229,14 @@ export async function initCommand(rl) {
   ]);
   if (previous) note(`기존 설정을 찾았습니다 (${CONFIG_PATH}). 값을 바꾸지 않으려면 계속 Enter를 누르세요.`);
 
-  const config = await askConfig(rl, previous);
+  let config;
+  if (options.from) {
+    // 질문 없이 만들기: 미리 적어 둔 설정 파일을 그대로 씁니다.
+    config = withDefaults(JSON.parse(fs.readFileSync(options.from, 'utf8')));
+    okItem('설정 파일을 읽었습니다', options.from);
+  } else {
+    config = await askConfig(rl, previous);
+  }
   if (!config.nas.host || !config.nas.adminUser) throw new Error('NAS 주소와 DSM 관리자 계정은 반드시 입력해야 합니다.');
 
   heading('파일 만들기');
@@ -187,7 +258,7 @@ export async function initCommand(rl) {
       skipItem(`${file} (이미 같은 내용)`);
       continue;
     }
-    if (existing && !(await confirm(rl, `${file} 파일이 이미 있습니다. 덮어쓸까요?`, false))) {
+    if (existing && !options.yes && !(await confirm(rl, `${file} 파일이 이미 있습니다. 덮어쓸까요?`, false))) {
       skipItem(`${file} (그대로 둠)`);
       continue;
     }
