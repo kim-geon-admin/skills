@@ -4,7 +4,7 @@
 // 모든 명령은 여러 번 실행해도 안전하며, 비밀번호는 저장하지 않습니다.
 import { createInterface } from 'node:readline/promises';
 import { UserError, loadConfig } from './lib/core.mjs';
-import { banner, bold, cyan, dim, panel, red } from './lib/ui.mjs';
+import { GLYPH, banner, bold, cyan, dim, panel, red } from './lib/ui.mjs';
 import { initCommand } from './lib/init.mjs';
 import { loginCommand } from './lib/login.mjs';
 import { keyCommand } from './lib/key.mjs';
@@ -26,9 +26,13 @@ const COMMANDS = [
 ];
 
 function usage() {
+  banner();
   const config = loadConfig({ required: false });
-  banner(config ? `${config.project}  ${config.nas?.host ?? ''}` : '먼저 nas-deploy init 을 실행하세요');
-  console.log(`\n  ${bold('사용법')}  node nas-deploy.mjs <명령> [--skip-nas]\n`);
+  console.log(`\n  ${bold('사용법')}  node nas-deploy.mjs <명령> [--skip-nas]`);
+  console.log(`  ${dim('저장소 폴더 안에서 실행합니다. 프로젝트마다 그 폴더에서 같은 명령을 쓰면 됩니다.')}`);
+  console.log(config
+    ? `  ${dim(`현재 폴더 설정: ${config.project} ${GLYPH.arrow} ${config.nas?.host ?? ''}`)}\n`
+    : `  ${dim('이 폴더에는 아직 설정이 없습니다. init 으로 시작하세요.')}\n`);
   for (const [name, summary, description] of COMMANDS) {
     console.log(`  ${cyan(name.padEnd(8))} ${summary}`);
     console.log(`           ${dim(description)}`);
@@ -65,8 +69,7 @@ async function main() {
     return;
   }
 
-  const config = loadConfig({ required: false });
-  banner(config ? `${config.project}  ${dim(config.nas?.host ?? '')}` : '');
+  banner();
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
     if (command === 'init') await initCommand(rl);

@@ -43,17 +43,16 @@ const BANNER = [
 ];
 const BANNER_COLORS = ['38;5;51', '38;5;45', '38;5;39', '38;5;38', '38;5;44', '38;5;37'];
 
-export function banner(subtitle = '') {
+export function banner() {
   if (plain) {
     console.log(`\n${bold('nas-deploy')} ${dim('· GitHub Actions -> Synology NAS')}`);
-    if (subtitle) console.log(dim(`  ${subtitle}`));
     return;
   }
   const side = [
     '',
     `${bold('deploy')}${dim(`   GitHub Actions ${GLYPH.arrow} Synology NAS`)}`,
     '',
-    subtitle ? dim(subtitle) : '',
+    dim('프로젝트마다 같은 방식으로 배포 환경을 만듭니다'),
     '',
     dim('명령 뒤에 --help 를 붙이면 설명이 나옵니다')
   ];

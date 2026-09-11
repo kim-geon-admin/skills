@@ -51,6 +51,26 @@ node ~/.claude/skills/synology-docker-deploy/cli/nas-deploy.mjs help
 | `env` | `.env`를 NAS에 반영(CRLF·제어문자 정리)하고 재배포 실행 |
 | `status` | 최근 실행 결과, 배포된 버전, 컨테이너 상태, 마지막 배포 로그 |
 
+### 여러 프로젝트에서 쓰기
+
+CLI는 특정 프로젝트에 묶이지 않는다. **실행한 폴더의 설정**(`infra/synology/deploy.config.json`)을 읽으므로,
+새 프로젝트에서는 그 저장소 폴더로 이동해 `init`부터 다시 하면 된다. 편의상 별칭을 만들어 두면 좋다.
+
+```bash
+alias nas-deploy='node ~/.claude/skills/synology-docker-deploy/cli/nas-deploy.mjs'
+```
+
+같은 NAS에 여러 프로젝트를 올릴 때 프로젝트마다 달라야 하는 값:
+
+| 항목 | 이유 |
+| --- | --- |
+| 프로젝트 이름 = NAS 폴더 `/volume1/docker/<이름>` = compose 프로젝트명 | 폴더·컨테이너 이름 충돌 방지 |
+| NAS 내부 포트(`HTTP_BIND`)와 역방향 프록시 외부 포트 | 포트 충돌 방지 |
+| 배포 열쇠와 `authorized_keys` 줄 (`github-actions@<프로젝트>`) | 키 하나가 뚫려도 다른 프로젝트에 영향 없음 |
+| `/etc/sudoers.d/<프로젝트>-deploy` | 프로젝트별 배포 스크립트만 허용 |
+
+배포 계정(`gh-deploy`), DSM 관리자 계정, 관리자 열쇠(`login`)는 NAS 단위라 프로젝트끼리 공유해도 된다.
+
 - 비밀번호는 저장하지 않는다. 명령 하나당 한 번만 물어보고 메모리에서만 쓴다(`sudo -S`로 전달).
 - 파일 전송은 scp 대신 같은 SSH 접속으로 보낸다(SFTP 설정과 무관, 접속 1회).
 - DSM 웹에서만 가능한 일(계정 생성, 공유 폴더 권한, 역방향 프록시, 공유기 포워딩)은 자동화하지 않고 안내·검증만 한다.
