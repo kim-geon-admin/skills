@@ -7,7 +7,7 @@ Claude Code는 `~/.claude/skills/<스킬 이름>/SKILL.md`를 자동으로 읽�
 
 | 스킬 | 설명 |
 | --- | --- |
-| [synology-docker-deploy](synology-docker-deploy/SKILL.md) | GitHub Actions로 이미지를 빌드해 Synology NAS Docker에 SSH로 안전하게 자동 배포(롤백 포함). 설정 절차, 템플릿, 시행착오 정리 |
+| [synology-docker-deploy](synology-docker-deploy/SKILL.md) | GitHub Actions로 이미지를 빌드해 Synology NAS Docker에 안전하게 자동 배포(롤백 포함). 설정을 대신 해 주는 `nas-deploy` CLI 포함 |
 
 ## 구조
 

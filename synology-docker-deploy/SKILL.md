@@ -27,9 +27,34 @@ GitHub Actions ──ssh(키: 강제 명령)──▶ deploy-gate.sh (gh-deploy 
 | `templates/deploy-gate.sh` | SSH 강제 명령. `deploy <40자 sha>` 외 전부 거부 |
 | `templates/compose.yaml` | NAS용 compose 예시(헬스체크, loopback 바인딩) |
 | `templates/gitattributes` | `*.sh eol=lf` (Windows `core.autocrlf=true` 대비) |
+| `cli/nas-deploy.mjs` | 설정·설치·점검을 대신 해 주는 CLI (Node 20+, 의존성 없음). 아래 "CLI로 진행하기" 참고 |
 | `scripts/test-deploy.sh` | 모의 docker로 배포 시나리오 15~16개 검증 (Docker 필요) |
 | `references/nas-setup.md` | 사용자와 함께 진행하는 NAS·GitHub 설정 단계 (한 단계씩 안내용) |
 | `references/security-review.md` | 기존 NAS 배포 워크플로 검토 체크리스트 |
+
+## CLI로 진행하기 (권장)
+
+사용자가 명령을 하나씩 치는 부담을 줄이려면 CLI를 쓴다. 저장소 루트에서 실행한다.
+
+```bash
+node ~/.claude/skills/synology-docker-deploy/cli/nas-deploy.mjs help
+```
+
+| 명령 | 하는 일 |
+| --- | --- |
+| `init` | 질문에 답하면 워크플로·compose·배포 스크립트·.env·설정 파일 생성 (액션 SHA도 최신으로 고정) |
+| `login` | (선택) 관리자 열쇠를 NAS에 등록해 이후 SSH 비밀번호 입력을 없앰 |
+| `key` | 배포 전용 열쇠 생성 → `authorized_keys`에 강제 명령으로 등록 → 호스트 키 저장·대조 → 접속 시험 |
+| `nas` | 스크립트·compose·.env를 한 번의 접속으로 전송·설치, sudo 규칙 생성, 권한 확인 |
+| `secrets` | GitHub Secret 5개 등록 |
+| `doctor` | PC·저장소·GitHub·열쇠·NAS를 한 번에 점검하고 해결 방법 제시 (아무것도 바꾸지 않음) |
+| `env` | `.env`를 NAS에 반영(CRLF·제어문자 정리)하고 재배포 실행 |
+| `status` | 최근 실행 결과, 배포된 버전, 컨테이너 상태, 마지막 배포 로그 |
+
+- 비밀번호는 저장하지 않는다. 명령 하나당 한 번만 물어보고 메모리에서만 쓴다(`sudo -S`로 전달).
+- 파일 전송은 scp 대신 같은 SSH 접속으로 보낸다(SFTP 설정과 무관, 접속 1회).
+- DSM 웹에서만 가능한 일(계정 생성, 공유 폴더 권한, 역방향 프록시, 공유기 포워딩)은 자동화하지 않고 안내·검증만 한다.
+- CLI가 없는 환경이거나 단계를 직접 보여 줘야 하면 아래 순서와 `references/nas-setup.md`를 쓴다.
 
 ## 진행 순서
 
