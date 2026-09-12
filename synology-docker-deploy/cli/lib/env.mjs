@@ -2,9 +2,30 @@
 import fs from 'node:fs';
 import { askNasPassword } from './ask.mjs';
 import {
-  ENV_PATH, REMOTE_STAGE, UserError, capture, filePayload, loadConfig, nasDir, readIfExists, remote, has
+  ENV_PATH, INSTALL_FAILED_MARK, UserError, capture, filePayload, loadConfig, nasDir, readIfExists, remote,
+  remoteStageFor, shellQuote, has
 } from './core.mjs';
 import { badItem, bold, confirm, cyan, detail, dim, heading, note, okItem, panel, skipItem, warnItem } from './ui.mjs';
+
+export function buildEnvInstallScript(config, envText) {
+  const dir = nasDir(config);
+  const stage = remoteStageFor(config);
+  const privileged = [
+    'set -e',
+    `mkdir -p ${dir}`,
+    `sed 's/\\r$//; s/\\x1b\\[20[01]~//g' ${stage}/env-file > ${stage}/env-file.cleaned`,
+    `install -o root -g root -m 600 ${stage}/env-file.cleaned ${dir}/.env`,
+    `echo "MODE=$(stat -c %a ${dir}/.env)"`,
+    `echo "LINES=$(grep -c . ${dir}/.env)"`,
+    `echo "CONTROL=$(grep -c "$(printf '\\033')" ${dir}/.env || true)"`
+  ].join('\n');
+
+  return [
+    filePayload({ 'env-file': envText }, stage),
+    `trap 'rm -rf ${stage}' EXIT`,
+    `sudo -S -p '' sh -c ${shellQuote(privileged)} || { echo ${INSTALL_FAILED_MARK}; exit 10; }`
+  ].join('\n');
+}
 
 export async function envCommand(rl) {
   const config = loadConfig();
@@ -32,17 +53,7 @@ export async function envCommand(rl) {
   }
 
   const password = await askNasPassword(rl, config, { reason: '설정 파일을 관리자 소유로 저장하기 위해' });
-  const script = [
-    'set -e',
-    filePayload({ 'env-file': envText }),
-    `sudo mkdir -p ${dir}`,
-    `sed 's/\\r$//; s/\\x1b\\[20[01]~//g' ${REMOTE_STAGE}/env-file | sudo tee ${dir}/.env > /dev/null`,
-    `sudo chmod 600 ${dir}/.env`,
-    `rm -rf ${REMOTE_STAGE}`,
-    `echo "MODE=$(sudo stat -c %a ${dir}/.env)"`,
-    `echo "LINES=$(sudo grep -c . ${dir}/.env)"`,
-    `echo "CONTROL=$(sudo grep -c "$(printf '\\033')" ${dir}/.env || true)"`
-  ].join('\n');
+  const script = buildEnvInstallScript(config, envText);
 
   heading('반영 중');
   const { out } = remote(config, script, { password });
