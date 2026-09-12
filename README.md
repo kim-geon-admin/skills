@@ -29,7 +29,7 @@ Claude Code는 `~/.claude/skills/<스킬 이름>/SKILL.md`를 자동으로 읽�
 
 **PC · Git Bash | 한 줄씩**
 ```bash
-git clone https://github.com/나의깃허브계정/skills.git ~/.claude/skills
+git clone https://github.com/kim-geon-admin/skills.git ~/.claude/skills
 ```
 
 `~/.claude/skills`가 이미 있으면 먼저 옮겨 두고 clone한 뒤, 기존 스킬 폴더를 다시 넣는다.
@@ -37,7 +37,7 @@ git clone https://github.com/나의깃허브계정/skills.git ~/.claude/skills
 **PC · Git Bash | 한 줄씩**
 ```bash
 mv ~/.claude/skills ~/.claude/skills.bak
-git clone https://github.com/나의깃허브계정/skills.git ~/.claude/skills
+git clone https://github.com/kim-geon-admin/skills.git ~/.claude/skills
 ```
 
 ## 스킬 추가·수정 후 올리기
@@ -56,7 +56,8 @@ git push
 ## 주의
 
 - 개인 키, 토큰, 비밀번호는 절대 넣지 않는다.
-- 도메인·포트·계정 이름 같은 개인 환경 값은 문서에 `나의NAS도메인`, `나의관리자계정` 같은 **대체어**로만 쓴다.
+- **이 저장소는 공개되어 있다.** 도메인·포트·계정 이름 같은 개인 환경 값은 문서에 `나의NAS도메인`,
+  `나의관리자계정` 같은 **대체어**로만 쓴다.
   실제 값은 각 스킬 폴더의 **`local-env.md`**에 두며, 이 파일은 `.gitignore`로 올라가지 않는다.
   새 PC에서는 `local-env.md`가 없으므로 스킬을 처음 쓸 때 Claude가 값을 물어 새로 만든다.
 - 커밋 전 확인: `git status`에 `local-env.md`가 보이면 안 된다.
