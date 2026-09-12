@@ -62,3 +62,8 @@ git push
   새 PC에서는 `local-env.md`가 없으므로 스킬을 처음 쓸 때 Claude가 값을 물어 새로 만든다.
 - 커밋 전 확인: `git status`에 `local-env.md`가 보이면 안 된다.
 - Windows에서 `core.autocrlf=true`여도 스크립트가 LF로 유지되도록 `.gitattributes`를 둔다.
+
+## 라이선스
+
+[MIT](LICENSE). 자유롭게 사용·수정·재배포할 수 있으며, 저작권 표시와 라이선스 전문을 함께 남기면 된다.
+제공되는 그대로 쓰는 것이며 보증은 없다.
