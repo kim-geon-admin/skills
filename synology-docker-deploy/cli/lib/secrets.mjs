@@ -9,7 +9,7 @@ export const githubRepo = (config) => `${config.owner}/${config.project}`;
 export const secretSetArgs = (config, name) => ['secret', 'set', name, '--repo', githubRepo(config)];
 export const secretListArgs = (config) => ['secret', 'list', '--repo', githubRepo(config)];
 export const repoViewArgs = (config) => [
-  'repo', 'view', '--repo', githubRepo(config), '--json', 'nameWithOwner,visibility',
+  'repo', 'view', githubRepo(config), '--json', 'nameWithOwner,visibility',
   '--jq', '.nameWithOwner + " (" + .visibility + ")"'
 ];
 

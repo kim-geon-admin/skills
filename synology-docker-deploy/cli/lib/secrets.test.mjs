@@ -13,7 +13,7 @@ test('targets the configured GitHub repository for every secret operation', () =
     'secret', 'list', '--repo', 'kim-geon-admin/ghdeploytest'
   ]);
   assert.deepEqual(repoViewArgs(config), [
-    'repo', 'view', '--repo', 'kim-geon-admin/ghdeploytest', '--json', 'nameWithOwner,visibility',
+    'repo', 'view', 'kim-geon-admin/ghdeploytest', '--json', 'nameWithOwner,visibility',
     '--jq', '.nameWithOwner + " (" + .visibility + ")"'
   ]);
 });
