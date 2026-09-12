@@ -7,6 +7,10 @@ import {
 } from './core.mjs';
 import { badItem, bold, confirm, cyan, detail, dim, heading, note, okItem, panel, skipItem, warnItem } from './ui.mjs';
 
+export const workflowRunArgs = (config) => [
+  'workflow', 'run', 'deploy.yml', '--repo', `${config.owner}/${config.project}`
+];
+
 export function buildEnvInstallScript(config, envText) {
   const dir = nasDir(config);
   const stage = remoteStageFor(config);
@@ -74,7 +78,7 @@ export async function envCommand(rl) {
     note('나중에 GitHub 화면에서 Actions → deploy → Run workflow 로 실행할 수 있습니다.');
     return;
   }
-  const result = capture('gh', ['workflow', 'run', 'deploy.yml']);
+  const result = capture('gh', workflowRunArgs(config));
   if (result.code === 0) {
     okItem('재배포를 요청했습니다');
     note('진행 상황은 "nas-deploy status" 또는 "gh run watch" 로 볼 수 있습니다.');
