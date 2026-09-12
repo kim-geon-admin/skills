@@ -57,6 +57,7 @@ CLI를 설치하지 않고 스킬 폴더를 직접 clone해서 쓰는 경우에�
 | `doctor` | PC·저장소·GitHub·열쇠·NAS를 한 번에 점검하고 해결 방법 제시 (아무것도 바꾸지 않음) |
 | `env` | `.env`를 NAS에 반영(CRLF·제어문자 정리)하고 재배포 실행 |
 | `cleanup` | 이 프로젝트의 배포 키 한 줄·전용 sudo 규칙·컨테이너·배포 파일만 제거. `gh-deploy` 계정과 다른 키, data/cache, 이미지는 보존 |
+| `session` | `temporary` 모드에서 DSM 비밀번호를 한 번만 입력하고 `prepare`·`key`·`nas`·`secrets`·`doctor`를 한 세션으로 진행. 종료 시 DPAPI 임시 파일 자동 삭제 |
 | `status` | 최근 실행 결과, 배포된 버전, 컨테이너 상태, 마지막 배포 로그 |
 
 ### init 이 만드는 파일
@@ -125,7 +126,7 @@ CLI를 전역 설치했다면 별칭 없이 모든 프로젝트에서 `nas-deplo
 
 배포 계정(`gh-deploy`), DSM 관리자 계정, 관리자 열쇠(`login`)는 NAS 단위라 프로젝트끼리 공유해도 된다.
 
-- 비밀번호는 저장하지 않는다. 명령 하나당 한 번만 물어보고 메모리에서만 쓴다(`sudo -S`로 전달).
+- 비밀번호 입력 방식은 `init`에서 고른다. `prompt`는 명령마다 직접 입력하고, Windows `temporary`는 DPAPI 암호화 임시 파일을 한 세션 동안만 사용한 뒤 자동 삭제한다.
 - 파일 전송은 scp 대신 같은 SSH 접속으로 보낸다(SFTP 설정과 무관, 접속 1회).
 - DSM 웹에서만 가능한 일(계정 생성, 공유 폴더 권한, 역방향 프록시, 공유기 포워딩)은 자동화하지 않는다. `prepare` 가 순서대로 안내하고, 계정·그룹·홈 접근·docker 폴더 접근·compose·sudoers.d 를 실제로 확인해 남은 것만 알려 준다.
 - CLI가 없는 환경이거나 단계를 직접 보여 줘야 하면 아래 순서와 `references/nas-setup.md`를 쓴다.

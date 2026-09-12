@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // nas-deploy - GitHub Actions에서 Synology NAS로 배포하는 환경을 만들고 운영하는 도구.
 // synology-docker-deploy 스킬의 일부입니다. Node 20 이상, 추가 설치 없이 동작합니다.
-// 모든 명령은 여러 번 실행해도 안전하며, 비밀번호는 저장하지 않습니다.
+// 모든 명령은 여러 번 실행해도 안전하며, 비밀번호는 기본적으로 저장하지 않습니다.
 import { createInterface } from 'node:readline/promises';
 import { UserError, loadConfig } from './lib/core.mjs';
 import { GLYPH, banner, bold, cyan, dim, panel, red } from './lib/ui.mjs';
@@ -15,6 +15,7 @@ import { envCommand } from './lib/env.mjs';
 import { doctorCommand } from './lib/doctor.mjs';
 import { statusCommand } from './lib/status.mjs';
 import { cleanupCommand } from './lib/cleanup.mjs';
+import { sessionCommand } from './lib/session.mjs';
 
 const COMMANDS = [
   ['init', '저장소에 배포용 파일을 만듭니다', '질문에 답하면 워크플로, compose, 배포 스크립트가 생성됩니다. 내 컴퓨터에만 저장됩니다.'],
@@ -26,6 +27,7 @@ const COMMANDS = [
   ['doctor', '배포 준비 상태를 점검합니다', '문제가 있으면 원인과 해결 방법을 알려 줍니다. 아무것도 바꾸지 않습니다.'],
   ['env', '설정 파일(.env)을 NAS에 반영합니다', '줄바꿈 문자를 정리해 올리고, 원하면 재배포까지 실행합니다.'],
   ['cleanup', '이 프로젝트의 NAS 배포 흔적만 제거합니다', 'gh-deploy 계정의 이 프로젝트 키 줄과 프로젝트 전용 권한만 제거하고 다른 키는 보존합니다.'],
+  ['session', 'DSM 비밀번호를 한 번만 입력하고 작업합니다', '한 세션 동안 암호화된 임시 파일을 사용하고 끝나면 자동으로 폐기합니다.'],
   ['status', '최근 배포 결과와 NAS 상태를 봅니다', '실행 기록, 배포된 버전, 컨테이너 상태, 마지막 배포 기록을 보여 줍니다.']
 ];
 
@@ -91,6 +93,7 @@ async function main() {
     else if (command === 'doctor') await doctorCommand(rl, options);
     else if (command === 'env') await envCommand(rl);
     else if (command === 'cleanup') await cleanupCommand(rl);
+    else if (command === 'session') await sessionCommand(rl);
     else if (command === 'status') await statusCommand(rl, options);
   } finally {
     rl.close();

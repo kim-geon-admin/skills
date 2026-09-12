@@ -7,6 +7,7 @@ import {
 } from './core.mjs';
 import { ask, badItem, bold, confirm, cyan, detail, dim, heading, note, okItem, panel, skipItem, step, warnItem } from './ui.mjs';
 import { PROJECT_TYPES, detectProjectType, renderDockerfile, tryBuild } from './dockerfile.mjs';
+import { normalizePasswordMode } from './password.mjs';
 
 const ACTION_REPOS = [
   'actions/checkout',
@@ -190,7 +191,12 @@ async function askConfig(rl, previous) {
   const deployUser = await ask(rl, '배포 전용 계정', previous?.nas?.deployUser ?? 'gh-deploy');
   const dir = await ask(rl, 'NAS 배포 폴더', previous?.nas?.dir ?? `/volume1/docker/${project}`);
 
-  heading('8. 백업');
+  heading('8. DSM 관리자 비밀번호 입력 방식');
+  detail('매번 입력(prompt) = 각 명령을 실행할 때마다 PowerShell에서 비밀번호를 입력합니다.');
+  detail('임시 보관(temporary) = nas-deploy session 안에서 한 번만 입력하고 세션 종료 후 자동 폐기합니다.');
+  const passwordMode = normalizePasswordMode(await ask(rl, '입력 방식 (prompt/temporary)', previous?.nas?.passwordMode ?? 'prompt'));
+
+  heading('9. 백업');
   detail('새 버전으로 바꾸기 전에 복사해 둘 파일입니다. 데이터베이스 파일이 있으면 적어 주세요. 없으면 그냥 Enter.');
   const backupFiles = (await ask(rl, '백업할 파일(쉼표로 구분)', (previous?.backupFiles ?? []).join(', ')))
     .split(',').map((file) => file.trim()).filter(Boolean);
@@ -206,14 +212,14 @@ async function askConfig(rl, previous) {
     healthCheck: ['node', 'wget', 'curl'].includes(healthCheck) ? healthCheck : 'none',
     healthPath,
     test,
-    nas: { host, port: Number(port), adminUser, deployUser, dir },
+    nas: { host, port: Number(port), adminUser, deployUser, dir, passwordMode, adminKey: previous?.nas?.adminKey ?? null },
     keyPath: previous?.keyPath ?? `~/.ssh/${project}_deploy`,
     backupFiles
   };
 }
 
 // 질문 없이 설정 파일(JSON)로 바로 만들 때 쓰는 기본값입니다.
-function withDefaults(input) {
+export function withDefaults(input) {
   const project = input.project ?? path.basename(process.cwd()).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
   const projectType = input.projectType ?? detectProjectType();
   const typeMeta = PROJECT_TYPES[projectType];
@@ -234,6 +240,7 @@ function withDefaults(input) {
       adminUser: input.nas?.adminUser ?? '',
       deployUser: input.nas?.deployUser ?? 'gh-deploy',
       dir: input.nas?.dir ?? `/volume1/docker/${project}`,
+      passwordMode: normalizePasswordMode(input.nas?.passwordMode),
       adminKey: input.nas?.adminKey ?? null
     },
     keyPath: input.keyPath ?? `~/.ssh/${project}_deploy`,
@@ -322,13 +329,22 @@ export async function initCommand(rl, options = {}) {
     warnItem('서비스가 여러 개입니다. compose.yaml의 두 번째 서비스 아래 볼륨과 환경 변수를 프로젝트에 맞게 손봐 주세요.');
   }
 
+  const nextSteps = config.nas.passwordMode === 'temporary'
+    ? [
+        `1. ${bold('nas-deploy session')}  ${dim('DSM 비밀번호를 한 번 입력하고 전체 작업을 진행합니다')}`,
+        '',
+        `${cyan('※')} session이 끝나면 암호화 임시 파일은 자동 폐기됩니다.`
+      ]
+    : [
+        `1. ${bold('nas-deploy doctor')}   ${dim('내 컴퓨터와 NAS 상태를 점검합니다')}`,
+        `2. ${bold('nas-deploy key')}      ${dim('배포용 열쇠를 만들어 NAS에 등록합니다')}`,
+        `3. ${bold('nas-deploy nas')}      ${dim('NAS에 배포 스크립트를 설치합니다')}`,
+        `4. ${bold('nas-deploy secrets')}  ${dim('GitHub에 접속 정보를 등록합니다')}`
+      ];
   panel('다음에 할 일', [
-    `1. ${bold('nas-deploy doctor')}   ${dim('내 컴퓨터와 NAS 상태를 점검합니다')}`,
-    `2. ${bold('nas-deploy key')}      ${dim('배포용 열쇠를 만들어 NAS에 등록합니다')}`,
-    `3. ${bold('nas-deploy nas')}      ${dim('NAS에 배포 스크립트를 설치합니다')}`,
-    `4. ${bold('nas-deploy secrets')}  ${dim('GitHub에 접속 정보를 등록합니다')}`,
+    ...nextSteps,
     '',
     `${cyan('※')} ${ENV_PATH} 를 열어 앱에 필요한 값을 채워 두세요.`,
-    `${cyan('※')} 만든 파일을 커밋해서 올리는 것은 4번까지 끝낸 뒤에 하세요.`
+    `${cyan('※')} 만든 파일을 커밋해서 올리는 것은 작업이 끝난 뒤에 하세요.`
   ]);
 }
