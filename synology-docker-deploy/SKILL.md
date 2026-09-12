@@ -56,6 +56,7 @@ CLI를 설치하지 않고 스킬 폴더를 직접 clone해서 쓰는 경우에�
 | `secrets` | GitHub Secret 5개 등록 |
 | `doctor` | PC·저장소·GitHub·열쇠·NAS를 한 번에 점검하고 해결 방법 제시 (아무것도 바꾸지 않음) |
 | `env` | `.env`를 NAS에 반영(CRLF·제어문자 정리)하고 재배포 실행 |
+| `cleanup` | 이 프로젝트의 배포 키 한 줄·전용 sudo 규칙·컨테이너·배포 파일만 제거. `gh-deploy` 계정과 다른 키, data/cache, 이미지는 보존 |
 | `status` | 최근 실행 결과, 배포된 버전, 컨테이너 상태, 마지막 배포 로그 |
 
 ### init 이 만드는 파일

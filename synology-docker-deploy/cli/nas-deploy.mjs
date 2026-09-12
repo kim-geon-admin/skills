@@ -14,6 +14,7 @@ import { secretsCommand } from './lib/secrets.mjs';
 import { envCommand } from './lib/env.mjs';
 import { doctorCommand } from './lib/doctor.mjs';
 import { statusCommand } from './lib/status.mjs';
+import { cleanupCommand } from './lib/cleanup.mjs';
 
 const COMMANDS = [
   ['init', '저장소에 배포용 파일을 만듭니다', '질문에 답하면 워크플로, compose, 배포 스크립트가 생성됩니다. 내 컴퓨터에만 저장됩니다.'],
@@ -24,6 +25,7 @@ const COMMANDS = [
   ['secrets', 'GitHub에 NAS 접속 정보를 등록합니다', '5개 값을 등록합니다. 레지스트리 비밀번호는 필요 없습니다.'],
   ['doctor', '배포 준비 상태를 점검합니다', '문제가 있으면 원인과 해결 방법을 알려 줍니다. 아무것도 바꾸지 않습니다.'],
   ['env', '설정 파일(.env)을 NAS에 반영합니다', '줄바꿈 문자를 정리해 올리고, 원하면 재배포까지 실행합니다.'],
+  ['cleanup', '이 프로젝트의 NAS 배포 흔적만 제거합니다', 'gh-deploy 계정의 이 프로젝트 키 줄과 프로젝트 전용 권한만 제거하고 다른 키는 보존합니다.'],
   ['status', '최근 배포 결과와 NAS 상태를 봅니다', '실행 기록, 배포된 버전, 컨테이너 상태, 마지막 배포 기록을 보여 줍니다.']
 ];
 
@@ -88,6 +90,7 @@ async function main() {
     else if (command === 'secrets') await secretsCommand(rl);
     else if (command === 'doctor') await doctorCommand(rl, options);
     else if (command === 'env') await envCommand(rl);
+    else if (command === 'cleanup') await cleanupCommand(rl);
     else if (command === 'status') await statusCommand(rl, options);
   } finally {
     rl.close();
