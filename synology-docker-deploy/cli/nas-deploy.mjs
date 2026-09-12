@@ -6,6 +6,7 @@ import { createInterface } from 'node:readline/promises';
 import { UserError, loadConfig } from './lib/core.mjs';
 import { GLYPH, banner, bold, cyan, dim, panel, red } from './lib/ui.mjs';
 import { initCommand } from './lib/init.mjs';
+import { prepareCommand } from './lib/prepare.mjs';
 import { loginCommand } from './lib/login.mjs';
 import { keyCommand } from './lib/key.mjs';
 import { nasCommand } from './lib/nas.mjs';
@@ -16,6 +17,7 @@ import { statusCommand } from './lib/status.mjs';
 
 const COMMANDS = [
   ['init', '저장소에 배포용 파일을 만듭니다', '질문에 답하면 워크플로, compose, 배포 스크립트가 생성됩니다. 내 컴퓨터에만 저장됩니다.'],
+  ['prepare', 'NAS 쪽 준비 상태를 안내하고 확인합니다', 'DSM에서 먼저 해야 하는 계정 생성과 공유 폴더 권한을 안내하고, 실제로 됐는지 검사합니다.'],
   ['login', 'NAS 접속 비밀번호 입력을 줄입니다', '이 컴퓨터의 열쇠를 NAS 관리자 계정에 등록합니다. 선택 사항입니다.'],
   ['key', '배포용 열쇠를 만들어 NAS에 등록합니다', '이 열쇠로는 배포 명령 하나만 실행할 수 있습니다.'],
   ['nas', 'NAS에 배포 스크립트와 권한을 설치합니다', '파일 전송, 소유자 설정, 권한 규칙까지 한 번에 처리합니다.'],
@@ -39,13 +41,14 @@ function usage() {
   }
   panel('처음이라면 이 순서로', [
     `1. ${bold('init')}     ${dim('파일 만들기')}`,
-    `2. ${bold('login')}    ${dim('(선택) 비밀번호 입력 줄이기')}`,
-    `3. ${bold('key')}      ${dim('열쇠 만들고 NAS에 등록')}`,
-    `4. ${bold('nas')}      ${dim('NAS에 설치')}`,
-    `5. ${bold('secrets')}  ${dim('GitHub에 등록')}`,
-    `6. ${bold('doctor')}   ${dim('점검 후 커밋·푸시하면 첫 배포 시작')}`,
+    `2. ${bold('prepare')}  ${dim('DSM 준비(계정·폴더 권한) 안내와 확인')}`,
+    `3. ${bold('login')}    ${dim('(선택) 비밀번호 입력 줄이기')}`,
+    `4. ${bold('key')}      ${dim('열쇠 만들고 NAS에 등록')}`,
+    `5. ${bold('nas')}      ${dim('NAS에 설치')}`,
+    `6. ${bold('secrets')}  ${dim('GitHub에 등록')}`,
+    `7. ${bold('doctor')}   ${dim('점검 후 커밋·푸시하면 첫 배포 시작')}`,
     '',
-    `${dim('DSM 웹에서 직접 해야 하는 것: 배포 계정 만들기, 공유 폴더 권한, 역방향 프록시, 공유기 포트 열기')}`
+    `${dim('DSM 웹에서만 할 수 있는 일(계정 생성, 공유 폴더 권한, 역방향 프록시, 포트 열기)은 prepare 가 안내합니다')}`
   ]);
 }
 
@@ -78,6 +81,7 @@ async function main() {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
     if (command === 'init') await initCommand(rl, options);
+    else if (command === 'prepare') await prepareCommand(rl);
     else if (command === 'login') await loginCommand(rl);
     else if (command === 'key') await keyCommand(rl);
     else if (command === 'nas') await nasCommand(rl);

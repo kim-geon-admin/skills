@@ -40,8 +40,11 @@ GitHub Actions ──ssh(키: 강제 명령)──▶ deploy-gate.sh (gh-deploy 
 node ~/.claude/skills/synology-docker-deploy/cli/nas-deploy.mjs help
 ```
 
+처음 설치하는 NAS라면 `init` 다음에 **`prepare`** 를 먼저 돌려 DSM 준비를 끝내야 `key` 가 성공한다.
+
 | 명령 | 하는 일 |
 | --- | --- |
+| `prepare` | DSM에서 먼저 해야 할 일(계정 생성, 공유 폴더 권한, 홈 서비스, Container Manager)을 안내하고 NAS에서 실제로 됐는지 검사 |
 | `init` | 질문에 답하면 워크플로·compose·배포 스크립트·.env·설정 파일 생성, 없으면 Dockerfile 초안까지 (액션 SHA도 최신으로 고정) |
 | `login` | (선택) 관리자 열쇠를 NAS에 등록해 이후 SSH 비밀번호 입력을 없앰 |
 | `key` | 배포 전용 열쇠 생성 → `authorized_keys`에 강제 명령으로 등록 → 호스트 키 저장·대조 → 접속 시험 |
@@ -120,7 +123,7 @@ alias nas-deploy='node ~/.claude/skills/synology-docker-deploy/cli/nas-deploy.mj
 
 - 비밀번호는 저장하지 않는다. 명령 하나당 한 번만 물어보고 메모리에서만 쓴다(`sudo -S`로 전달).
 - 파일 전송은 scp 대신 같은 SSH 접속으로 보낸다(SFTP 설정과 무관, 접속 1회).
-- DSM 웹에서만 가능한 일(계정 생성, 공유 폴더 권한, 역방향 프록시, 공유기 포워딩)은 자동화하지 않고 안내·검증만 한다.
+- DSM 웹에서만 가능한 일(계정 생성, 공유 폴더 권한, 역방향 프록시, 공유기 포워딩)은 자동화하지 않는다. `prepare` 가 순서대로 안내하고, 계정·그룹·홈 접근·docker 폴더 접근·compose·sudoers.d 를 실제로 확인해 남은 것만 알려 준다.
 - CLI가 없는 환경이거나 단계를 직접 보여 줘야 하면 아래 순서와 `references/nas-setup.md`를 쓴다.
 
 ## 진행 순서
