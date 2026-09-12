@@ -104,11 +104,26 @@ function buildDeployScript(config) {
 
 const buildGate = (config) => template('deploy-gate.sh').replaceAll('__PROJECT__', config.project);
 
-function buildEnv(config) {
+export function normalizeAccessMode(value) {
+  return value === 'internal' ? 'internal' : 'reverse-proxy';
+}
+
+export function connectionRoute(config) {
+  const mode = normalizeAccessMode(config.network?.mode);
+  const bindHost = config.network?.bindHost ?? (mode === 'reverse-proxy' ? '127.0.0.1' : '(시놀로지 내부 IP)');
+  const docker = `${bindHost}:${config.hostPort}`;
+  const container = `컨테이너:${config.containerPort}`;
+  if (mode === 'internal') return `${docker} → ${container}`;
+  const url = config.network?.publicUrl || '(외부 URL)';
+  return `${url}:${config.network?.publicPort ?? 443} → ${docker} → ${container}`;
+}
+
+export function buildEnv(config) {
+  const bindHost = config.network?.bindHost ?? '127.0.0.1';
   return [
     `DATA_DIR=${config.nas.dir}/data`,
     `CACHE_DIR=${config.nas.dir}/cache`,
-    `HTTP_BIND=127.0.0.1:${config.hostPort}`,
+    `HTTP_BIND=${bindHost}:${config.hostPort}`,
     '',
     '# 앱이 필요로 하는 값(비밀번호 등)을 여기에 추가하세요. 이 파일은 git에 올라가지 않습니다.',
     ''
@@ -162,11 +177,32 @@ async function askConfig(rl, previous) {
     : 'Dockerfile 경로를 저장소 기준으로 적어 주세요.');
   const dockerfile = await ask(rl, 'Dockerfile 경로', previous?.dockerfile ?? (multi ? 'infra/docker/${{ matrix.service }}.Dockerfile' : './Dockerfile'));
 
-  heading('4. 포트');
-  detail('앱이 컨테이너 안에서 듣는 포트입니다.');
-  const containerPort = await ask(rl, '컨테이너 포트', String(previous?.containerPort ?? typeMeta?.containerPort ?? 3000));
-  detail('NAS 안에서만 열리는 포트입니다. DSM 역방향 프록시가 이 포트로 연결합니다. 다른 프로젝트와 겹치지 않게 하세요.');
-  const hostPort = await ask(rl, 'NAS 내부 포트', String(previous?.hostPort ?? 3100));
+  heading('4. 접속 경로와 포트');
+  detail('먼저 외부 역방향 프록시인지, 로컬 네트워크 내부 전용인지 선택합니다.');
+  detail('역방향 프록시: 외부 URL:외부 포트 → 127.0.0.1:Synology Docker 포트 → 컨테이너 포트');
+  detail('내부 전용: Synology 내부 IP:Synology Docker 포트 → 컨테이너 포트');
+  const mode = normalizeAccessMode(await ask(rl, '접속 방식 (reverse-proxy/internal)', previous?.network?.mode ?? 'reverse-proxy'));
+  let publicUrl = '';
+  let publicPort = 443;
+  let bindHost = '';
+  if (mode === 'reverse-proxy') {
+    publicUrl = await ask(rl, '외부 URL (포트 제외, 예: https://app.example.com)', previous?.network?.publicUrl ?? '');
+    publicPort = Number(await ask(rl, '외부 포트 (예: 443)', String(previous?.network?.publicPort ?? 443)));
+    bindHost = '127.0.0.1';
+    detail('역방향 프록시는 외부 URL을 Synology 역방향 프록시에서 아래 Docker 연결 포트로 연결하세요.');
+  } else {
+    bindHost = await ask(rl, 'Synology 내부 IP (예: 192.168.0.20)', previous?.network?.bindHost ?? '');
+    detail('내부 전용은 같은 네트워크의 기기에서 위 내부 IP와 아래 Docker 연결 포트로 접속합니다.');
+  }
+  detail('Synology Docker 연결 포트입니다. 외부 포트/내부 접속 포트와 구분해서 입력하세요.');
+  const hostPort = await ask(rl, 'Synology Docker 연결 포트', String(previous?.hostPort ?? 3100));
+  detail('앱이 컨테이너 안에서 실제로 듣는 포트입니다.');
+  const containerPort = await ask(rl, '실제 컨테이너 포트', String(previous?.containerPort ?? typeMeta?.containerPort ?? 3000));
+  if (mode === 'reverse-proxy' && !publicUrl) throw new Error('역방향 프록시를 선택했으므로 외부 URL을 입력해야 합니다.');
+  if (mode === 'internal' && !bindHost) throw new Error('내부 전용을 선택했으므로 Synology 내부 IP를 입력해야 합니다.');
+  if (!Number.isInteger(Number(publicPort)) || Number(publicPort) < 1 || Number(publicPort) > 65535) throw new Error('외부 포트는 1부터 65535 사이의 숫자여야 합니다.');
+  if (!Number.isInteger(Number(hostPort)) || Number(hostPort) < 1 || Number(hostPort) > 65535) throw new Error('Synology Docker 연결 포트는 1부터 65535 사이의 숫자여야 합니다.');
+  if (!Number.isInteger(Number(containerPort)) || Number(containerPort) < 1 || Number(containerPort) > 65535) throw new Error('실제 컨테이너 포트는 1부터 65535 사이의 숫자여야 합니다.');
 
   heading('5. 상태 확인(헬스 체크)');
   detail('배포 뒤 앱이 정상인지 확인하는 방법입니다. 이미지 안에 실제로 있는 명령을 골라야 합니다.');
@@ -209,6 +245,7 @@ async function askConfig(rl, previous) {
     dockerfile,
     containerPort: Number(containerPort),
     hostPort: Number(hostPort),
+    network: { mode, publicUrl, publicPort, bindHost },
     healthCheck: ['node', 'wget', 'curl'].includes(healthCheck) ? healthCheck : 'none',
     healthPath,
     test,
@@ -223,6 +260,8 @@ export function withDefaults(input) {
   const project = input.project ?? path.basename(process.cwd()).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
   const projectType = input.projectType ?? detectProjectType();
   const typeMeta = PROJECT_TYPES[projectType];
+  const networkMode = normalizeAccessMode(input.network?.mode);
+  const networkBindHost = input.network?.bindHost ?? (networkMode === 'reverse-proxy' ? '127.0.0.1' : '');
   return {
     project,
     owner: (input.owner ?? '').toLowerCase(),
@@ -231,6 +270,12 @@ export function withDefaults(input) {
     dockerfile: input.dockerfile ?? './Dockerfile',
     containerPort: Number(input.containerPort ?? typeMeta?.containerPort ?? 3000),
     hostPort: Number(input.hostPort ?? 3100),
+    network: {
+      mode: networkMode,
+      publicUrl: networkMode === 'internal' ? '' : (input.network?.publicUrl ?? ''),
+      publicPort: Number(input.network?.publicPort ?? 443),
+      bindHost: networkBindHost
+    },
     healthCheck: ['node', 'wget', 'curl', 'none'].includes(input.healthCheck) ? input.healthCheck : (typeMeta?.healthCheck ?? 'none'),
     healthPath: input.healthPath ?? typeMeta?.healthPath ?? '/health',
     test: input.test ?? [],
@@ -328,6 +373,14 @@ export async function initCommand(rl, options = {}) {
   if (config.services.length > 1) {
     warnItem('서비스가 여러 개입니다. compose.yaml의 두 번째 서비스 아래 볼륨과 환경 변수를 프로젝트에 맞게 손봐 주세요.');
   }
+
+  panel('접속 경로 기록', [
+    connectionRoute(config),
+    config.network.mode === 'reverse-proxy'
+      ? '외부 URL은 Synology 역방향 프록시의 소스 주소로 사용하세요.'
+      : '같은 로컬 네트워크의 기기는 Synology 내부 IP와 Docker 연결 포트로 접속하세요.',
+    `HTTP_BIND=${config.network.bindHost}:${config.hostPort}`
+  ]);
 
   const nextSteps = config.nas.passwordMode === 'temporary'
     ? [
