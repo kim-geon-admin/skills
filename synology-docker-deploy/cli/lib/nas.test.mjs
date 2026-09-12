@@ -20,6 +20,7 @@ test('builds NAS installation as one password-fed root shell', () => {
 
   assert.match(script, /sudo -S -p '' sh -c/);
   assert.match(script, /\/var\/services\/homes\/nayaguny\/.nas-deploy-upload\/deploy\.sh/);
+  assert.match(script, /echo "ENVMODE=\$\(stat -c %a [^\n]+ \|\| echo none\)"/);
   assert.doesNotMatch(script, /\$HOME\/\.nas-deploy-upload|\/root\/\.nas-deploy-upload/);
   assert.doesNotMatch(script, /sudo mkdir|sudo install|sudo chmod|sudo tee/);
 });

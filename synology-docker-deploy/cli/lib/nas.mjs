@@ -28,7 +28,7 @@ export function buildInstallScript(config, files, envText) {
     `if /usr/local/bin/docker-compose version >/dev/null 2>&1; then echo "COMPOSE=ok"; elif /usr/local/bin/docker compose version >/dev/null 2>&1; then echo "COMPOSE=ok"; else echo "COMPOSE=missing"; fi`,
     `echo "GATE=$(stat -c %a ${dir}/bin/deploy-gate.sh)"`,
     `echo "SCRIPT=$(stat -c %a ${dir}/bin/deploy.sh)"`,
-    `echo "ENVMODE=$(stat -c %a ${dir}/.env 2>/dev/null || echo none)`
+    `echo "ENVMODE=$(stat -c %a ${dir}/.env 2>/dev/null || echo none)"`
   ].join('\n');
 
   return [
