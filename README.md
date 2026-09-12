@@ -67,3 +67,15 @@ git push
 
 [MIT](LICENSE). 자유롭게 사용·수정·재배포할 수 있으며, 저작권 표시와 라이선스 전문을 함께 남기면 된다.
 제공되는 그대로 쓰는 것이며 보증은 없다.
+
+## CLI 설치
+
+Node.js 20 이상이면 저장소에서 CLI를 바로 설치할 수 있습니다.
+
+```bash
+npm install -g github:kim-geon-admin/skills
+nas-deploy help
+```
+
+설치 후에는 프로젝트 저장소 폴더에서 `nas-deploy init`부터 실행합니다. CLI는
+`synology-docker-deploy` 스킬 파일과 함께 설치되며, 별도 의존성이 필요하지 않습니다.

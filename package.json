@@ -1,0 +1,19 @@
+{
+  "name": "synology-docker-deploy",
+  "version": "1.0.0",
+  "description": "GitHub Actions to Synology NAS Docker deployment skill and CLI",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "nas-deploy": "synology-docker-deploy/cli/nas-deploy.mjs"
+  },
+  "files": [
+    "synology-docker-deploy"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kim-geon-admin/skills.git"
+  }
+}
