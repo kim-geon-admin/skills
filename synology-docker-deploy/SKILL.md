@@ -93,7 +93,7 @@ Spring/Tomcat, `requirements.txt` → Python, `go.mod` → Go, `index.html` → 
 
 **공통 제한**
 
-- **Dockerfile이 반드시 있어야 한다.** CLI는 Dockerfile을 만들어 주지 않는다(경로만 물어본다).
+- **Dockerfile이 반드시 있어야 한다.** 없으면 `init`이 종류에 맞는 초안을 만들어 주지만, 실행 명령과 빌드 산출물 경로는 프로젝트에 맞게 확인해야 한다.
 - **linux/amd64 전용.** 워크플로가 amd64로 빌드한다. ARM 기반 Synology(예: 일부 J 시리즈)는 `platforms` 수정 필요.
 - **한 프로젝트 = compose 스택 하나.** 서비스를 여러 개 둘 수 있지만, 두 번째 서비스부터는 compose에 볼륨·환경 변수를 직접 적어야 한다.
 - **상태 확인 명령은 이미지 안에 있어야 한다.** 없는 명령을 고르면 컨테이너가 계속 "이상"으로 보여 롤백된다. 확실하지 않으면 `none`.
