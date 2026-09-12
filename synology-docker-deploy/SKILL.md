@@ -37,8 +37,12 @@ GitHub Actions ──ssh(키: 강제 명령)──▶ deploy-gate.sh (gh-deploy 
 사용자가 명령을 하나씩 치는 부담을 줄이려면 CLI를 쓴다. 저장소 루트에서 실행한다.
 
 ```bash
-node ~/.claude/skills/synology-docker-deploy/cli/nas-deploy.mjs help
+npm install -g github:kim-geon-admin/skills
+nas-deploy help
 ```
+
+CLI를 설치하지 않고 스킬 폴더를 직접 clone해서 쓰는 경우에는
+`node ~/.claude/skills/synology-docker-deploy/cli/nas-deploy.mjs help`로 실행할 수도 있다.
 
 처음 설치하는 NAS라면 `init` 다음에 **`prepare`** 를 먼저 돌려 DSM 준비를 끝내야 `key` 가 성공한다.
 
@@ -104,11 +108,10 @@ Spring/Tomcat, `requirements.txt` → Python, `go.mod` → Go, `index.html` → 
 ### 여러 프로젝트에서 쓰기
 
 CLI는 특정 프로젝트에 묶이지 않는다. **실행한 폴더의 설정**(`infra/synology/deploy.config.json`)을 읽으므로,
-새 프로젝트에서는 그 저장소 폴더로 이동해 `init`부터 다시 하면 된다. 편의상 별칭을 만들어 두면 좋다.
+새 프로젝트에서는 그 저장소 폴더로 이동해 `nas-deploy init`부터 다시 하면 된다.
 
-```bash
-alias nas-deploy='node ~/.claude/skills/synology-docker-deploy/cli/nas-deploy.mjs'
-```
+CLI를 전역 설치했다면 별칭 없이 모든 프로젝트에서 `nas-deploy` 명령을 사용할 수 있다.
+설치하지 않은 경우에는 위의 직접 실행 명령을 별칭으로 등록해도 된다.
 
 같은 NAS에 여러 프로젝트를 올릴 때 프로젝트마다 달라야 하는 값:
 

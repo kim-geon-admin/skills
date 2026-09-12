@@ -79,3 +79,7 @@ nas-deploy help
 
 설치 후에는 프로젝트 저장소 폴더에서 `nas-deploy init`부터 실행합니다. CLI는
 `synology-docker-deploy` 스킬 파일과 함께 설치되며, 별도 의존성이 필요하지 않습니다.
+
+위의 `git clone` 방식은 Claude Code가 스킬을 자동으로 읽게 할 때 사용하고, CLI만
+사용하려면 npm 설치 방식만 실행하면 됩니다. 이미 설치한 CLI를 최신 버전으로
+갱신하려면 같은 `npm install -g` 명령을 다시 실행하세요.

@@ -30,7 +30,7 @@ const COMMANDS = [
 function usage() {
   banner();
   const config = loadConfig({ required: false });
-  console.log(`\n  ${bold('사용법')}  node nas-deploy.mjs <명령> [--skip-nas]`);
+  console.log(`\n  ${bold('사용법')}  nas-deploy <명령> [--skip-nas]`);
   console.log(`  ${dim('저장소 폴더 안에서 실행합니다. 프로젝트마다 그 폴더에서 같은 명령을 쓰면 됩니다.')}`);
   console.log(config
     ? `  ${dim(`현재 폴더 설정: ${config.project} ${GLYPH.arrow} ${config.nas?.host ?? ''}`)}\n`
@@ -103,6 +103,6 @@ main().catch((error) => {
     console.log(`  ${red('예상하지 못한 오류입니다')}`);
     console.log(`  ${error?.stack ?? error}`);
   }
-  console.log(`\n  ${dim('도움말: node nas-deploy.mjs help')}`);
+  console.log(`\n  ${dim('도움말: nas-deploy help')}`);
   process.exitCode = 1;
 });
