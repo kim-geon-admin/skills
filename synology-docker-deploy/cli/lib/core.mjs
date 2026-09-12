@@ -9,12 +9,15 @@ import zlib from 'node:zlib';
 
 export const CLI_DIR = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 export const TEMPLATE_DIR = path.join(CLI_DIR, '..', 'templates');
-export const CONFIG_PATH = 'infra/synology/deploy.config.json';
-export const ENV_PATH = 'infra/synology/.env';
+// 워크플로 파일만 GitHub 이 정한 위치에 있어야 하고, 나머지는 이 폴더 하나에 모입니다.
+// 다른 위치를 쓰려면 NAS_DEPLOY_DIR 환경 변수로 바꿀 수 있습니다 (예: deploy).
+export const BASE_DIR = (process.env.NAS_DEPLOY_DIR ?? 'infra/synology').replace(/[\/]+$/, '');
+export const CONFIG_PATH = `${BASE_DIR}/deploy.config.json`;
+export const ENV_PATH = `${BASE_DIR}/.env`;
 export const WORKFLOW_PATH = '.github/workflows/deploy.yml';
-export const COMPOSE_PATH = 'infra/synology/compose.yaml';
-export const DEPLOY_SCRIPT_PATH = 'infra/synology/deploy.sh';
-export const GATE_SCRIPT_PATH = 'infra/synology/deploy-gate.sh';
+export const COMPOSE_PATH = `${BASE_DIR}/compose.yaml`;
+export const DEPLOY_SCRIPT_PATH = `${BASE_DIR}/deploy.sh`;
+export const GATE_SCRIPT_PATH = `${BASE_DIR}/deploy-gate.sh`;
 export const SECRET_NAMES = ['NAS_SSH_HOST', 'NAS_SSH_PORT', 'NAS_SSH_USER', 'NAS_SSH_PRIVATE_KEY', 'NAS_SSH_KNOWN_HOSTS'];
 export const ZERO_TAG = '0'.repeat(40);
 export const BAD_PASSWORD_MARK = 'NAS_DEPLOY_BAD_PASSWORD';

@@ -42,7 +42,7 @@ node ~/.claude/skills/synology-docker-deploy/cli/nas-deploy.mjs help
 
 | 명령 | 하는 일 |
 | --- | --- |
-| `init` | 질문에 답하면 워크플로·compose·배포 스크립트·.env·설정 파일 생성 (액션 SHA도 최신으로 고정) |
+| `init` | 질문에 답하면 워크플로·compose·배포 스크립트·.env·설정 파일 생성, 없으면 Dockerfile 초안까지 (액션 SHA도 최신으로 고정) |
 | `login` | (선택) 관리자 열쇠를 NAS에 등록해 이후 SSH 비밀번호 입력을 없앰 |
 | `key` | 배포 전용 열쇠 생성 → `authorized_keys`에 강제 명령으로 등록 → 호스트 키 저장·대조 → 접속 시험 |
 | `nas` | 스크립트·compose·.env를 한 번의 접속으로 전송·설치, sudo 규칙 생성, 권한 확인 |
@@ -50,6 +50,26 @@ node ~/.claude/skills/synology-docker-deploy/cli/nas-deploy.mjs help
 | `doctor` | PC·저장소·GitHub·열쇠·NAS를 한 번에 점검하고 해결 방법 제시 (아무것도 바꾸지 않음) |
 | `env` | `.env`를 NAS에 반영(CRLF·제어문자 정리)하고 재배포 실행 |
 | `status` | 최근 실행 결과, 배포된 버전, 컨테이너 상태, 마지막 배포 로그 |
+
+### init 이 만드는 파일
+
+```text
+.github/workflows/deploy.yml   GitHub 이 정한 위치라 여기에만 둘 수 있음
+infra/synology/                나머지는 이 폴더 하나에 모임 (NAS_DEPLOY_DIR 로 변경 가능)
+  compose.yaml                 NAS에서 컨테이너를 띄우는 설정
+  deploy.sh                    NAS에서 교체·헬스체크·롤백
+  deploy-gate.sh               배포 열쇠가 실행할 수 있는 유일한 명령
+  .env                         NAS 전용 설정값 (git 제외)
+  deploy.config.json           CLI 설정 (git 제외)
+Dockerfile                     없을 때만, 프로젝트 종류에 맞는 초안 생성 (경로는 질문에서 지정)
+.gitattributes                 *.sh eol=lf
+.gitignore                     .env, deploy.config.json 항목 추가
+```
+
+Dockerfile 초안은 폴더 안의 파일로 종류를 추측해 만든다(`package.json`의 next → Next.js, `pom.xml` →
+Spring/Tomcat, `requirements.txt` → Python, `go.mod` → Go, `index.html` → 정적 사이트). 도커가 실행 중이면
+그 자리에서 `docker build`로 빌드되는지 확인하고, 실패하면 오류를 그대로 보여 준다. **초안일 뿐이므로
+프로젝트에 맞게 손보는 것을 전제로 한다.**
 
 ### 지원 범위와 제한 (언어·프레임워크)
 

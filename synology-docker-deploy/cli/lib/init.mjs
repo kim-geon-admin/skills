@@ -6,6 +6,7 @@ import {
   capture, ensureIgnored, expandHome, has, imagePrefix, loadConfig, readIfExists, saveConfig, writeFile
 } from './core.mjs';
 import { ask, badItem, bold, confirm, cyan, detail, dim, heading, note, okItem, panel, skipItem, step, warnItem } from './ui.mjs';
+import { PROJECT_TYPES, detectProjectType, renderDockerfile, tryBuild } from './dockerfile.mjs';
 
 const ACTION_REPOS = [
   'actions/checkout',
@@ -24,11 +25,19 @@ function buildWorkflow(config) {
   text = text.replace('service: [app]', `service: [${config.services.map((service) => service.name).join(', ')}]`);
   text = text.replace('file: __DOCKERFILE__', `file: ${config.dockerfile}`);
 
-  // Node 계열 명령이 없으면 Node/pnpm 준비 단계는 빼서 다른 언어에서도 그대로 동작하게 합니다.
-  const usesNode = config.test.some((command) => /^(pnpm|npm|npx|node|yarn)\b/.test(command));
-  if (!usesNode) {
-    text = text.replace(/\n      - uses: actions\/setup-node@[^\n]*\n        with:\n          node-version: 22\n      - uses: pnpm\/action-setup@[^\n]*\n        with:\n          cache: true/, '');
-  }
+  // 준비 단계는 실제로 쓰는 도구에 맞춰 남깁니다. 다른 언어 프로젝트에서는 모두 빠집니다.
+  const usesNode = config.test.some((command) => /^(pnpm|npm|npx|node|yarn)/.test(command));
+  const usesPnpm = config.test.some((command) => /^pnpm/.test(command));
+  const dropStep = (source, marker, lineCount) => {
+    const lines = source.split(String.fromCharCode(10));
+    const index = lines.findIndex((line) => line.includes(marker));
+    if (index < 0) return source;
+    lines.splice(index, lineCount);
+    return lines.join(String.fromCharCode(10));
+  };
+  if (!usesPnpm) text = dropStep(text, 'uses: pnpm/action-setup@', 3);
+  if (!usesNode) text = dropStep(text, 'uses: actions/setup-node@', 3);
+
   const testSteps = config.test.length
     ? config.test.map((command) => `      - run: ${command}`).join('\n')
     : '      - run: echo "이 프로젝트에는 배포 전 검사 명령이 없습니다"';
@@ -134,7 +143,15 @@ async function askConfig(rl, previous) {
   const ownerGuess = previous?.owner ?? capture('gh', ['api', 'user', '--jq', '.login']).out;
   const owner = (await ask(rl, 'GitHub 계정', ownerGuess)).toLowerCase();
 
-  heading('2. 서비스와 Dockerfile');
+  heading('2. 프로젝트 종류');
+  const detected = detectProjectType();
+  detail('폴더 안의 파일을 보고 종류를 추측했습니다. 이 값으로 포트와 상태 확인 방법의 기본값이 정해집니다.');
+  for (const [name, meta] of Object.entries(PROJECT_TYPES)) detail(`${name.padEnd(7)} ${meta.label}`);
+  const projectType = (await ask(rl, '종류', previous?.projectType ?? detected ?? 'static')).toLowerCase();
+  const typeMeta = PROJECT_TYPES[projectType];
+  if (!typeMeta) warnItem('모르는 종류입니다. 기본값으로 진행합니다.');
+
+  heading('3. 서비스와 Dockerfile');
   detail('컨테이너로 띄울 서비스 이름입니다. 하나면 app 만 적으면 됩니다. 여러 개면 쉼표로 구분하세요.');
   const serviceNames = (await ask(rl, '서비스 목록', (previous?.services ?? [{ name: 'app' }]).map((service) => service.name).join(', ')))
     .split(',').map((name) => name.trim()).filter(Boolean);
@@ -144,26 +161,26 @@ async function askConfig(rl, previous) {
     : 'Dockerfile 경로를 저장소 기준으로 적어 주세요.');
   const dockerfile = await ask(rl, 'Dockerfile 경로', previous?.dockerfile ?? (multi ? 'infra/docker/${{ matrix.service }}.Dockerfile' : './Dockerfile'));
 
-  heading('3. 포트');
+  heading('4. 포트');
   detail('앱이 컨테이너 안에서 듣는 포트입니다.');
-  const containerPort = await ask(rl, '컨테이너 포트', String(previous?.containerPort ?? 3000));
+  const containerPort = await ask(rl, '컨테이너 포트', String(previous?.containerPort ?? typeMeta?.containerPort ?? 3000));
   detail('NAS 안에서만 열리는 포트입니다. DSM 역방향 프록시가 이 포트로 연결합니다. 다른 프로젝트와 겹치지 않게 하세요.');
   const hostPort = await ask(rl, 'NAS 내부 포트', String(previous?.hostPort ?? 3100));
 
-  heading('4. 상태 확인(헬스 체크)');
+  heading('5. 상태 확인(헬스 체크)');
   detail('배포 뒤 앱이 정상인지 확인하는 방법입니다. 이미지 안에 실제로 있는 명령을 골라야 합니다.');
   detail('node = Node 이미지, wget = alpine/nginx 계열, curl = curl이 설치된 이미지, none = 실행 여부만 확인');
-  const healthCheck = (await ask(rl, '확인 방법 (node/wget/curl/none)', previous?.healthCheck ?? 'none')).toLowerCase();
+  const healthCheck = (await ask(rl, '확인 방법 (node/wget/curl/none)', previous?.healthCheck ?? typeMeta?.healthCheck ?? 'none')).toLowerCase();
   const healthPath = ['node', 'wget', 'curl'].includes(healthCheck)
-    ? await ask(rl, '확인할 주소 경로', previous?.healthPath ?? '/health')
-    : (previous?.healthPath ?? '/health');
+    ? await ask(rl, '확인할 주소 경로', previous?.healthPath ?? typeMeta?.healthPath ?? '/health')
+    : (previous?.healthPath ?? typeMeta?.healthPath ?? '/health');
 
-  heading('5. 테스트 명령');
+  heading('6. 테스트 명령');
   detail('배포 전에 GitHub에서 실행할 명령입니다. 이 단계가 실패하면 NAS로 배포되지 않습니다.');
   const test = (await ask(rl, '명령 목록(쉼표로 구분)', (previous?.test ?? ['pnpm install --frozen-lockfile', 'pnpm typecheck', 'pnpm test']).join(', ')))
     .split(',').map((command) => command.trim()).filter(Boolean);
 
-  heading('6. NAS 접속 정보');
+  heading('7. NAS 접속 정보');
   detail('GitHub Actions와 이 도구가 접속할 주소입니다.');
   const host = await ask(rl, 'NAS 주소', previous?.nas?.host ?? '');
   const port = await ask(rl, 'SSH 포트', String(previous?.nas?.port ?? 22));
@@ -173,7 +190,7 @@ async function askConfig(rl, previous) {
   const deployUser = await ask(rl, '배포 전용 계정', previous?.nas?.deployUser ?? 'gh-deploy');
   const dir = await ask(rl, 'NAS 배포 폴더', previous?.nas?.dir ?? `/volume1/docker/${project}`);
 
-  heading('7. 백업');
+  heading('8. 백업');
   detail('새 버전으로 바꾸기 전에 복사해 둘 파일입니다. 데이터베이스 파일이 있으면 적어 주세요. 없으면 그냥 Enter.');
   const backupFiles = (await ask(rl, '백업할 파일(쉼표로 구분)', (previous?.backupFiles ?? []).join(', ')))
     .split(',').map((file) => file.trim()).filter(Boolean);
@@ -181,6 +198,7 @@ async function askConfig(rl, previous) {
   return {
     project,
     owner,
+    projectType: typeMeta ? projectType : '',
     services: serviceNames.map((name) => ({ name })),
     dockerfile,
     containerPort: Number(containerPort),
@@ -197,15 +215,18 @@ async function askConfig(rl, previous) {
 // 질문 없이 설정 파일(JSON)로 바로 만들 때 쓰는 기본값입니다.
 function withDefaults(input) {
   const project = input.project ?? path.basename(process.cwd()).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+  const projectType = input.projectType ?? detectProjectType();
+  const typeMeta = PROJECT_TYPES[projectType];
   return {
     project,
     owner: (input.owner ?? '').toLowerCase(),
+    projectType: typeMeta ? projectType : '',
     services: (input.services ?? [{ name: 'app' }]).map((service) => (typeof service === 'string' ? { name: service } : service)),
     dockerfile: input.dockerfile ?? './Dockerfile',
-    containerPort: Number(input.containerPort ?? 3000),
+    containerPort: Number(input.containerPort ?? typeMeta?.containerPort ?? 3000),
     hostPort: Number(input.hostPort ?? 3100),
-    healthCheck: ['node', 'wget', 'curl'].includes(input.healthCheck) ? input.healthCheck : 'none',
-    healthPath: input.healthPath ?? '/health',
+    healthCheck: ['node', 'wget', 'curl', 'none'].includes(input.healthCheck) ? input.healthCheck : (typeMeta?.healthCheck ?? 'none'),
+    healthPath: input.healthPath ?? typeMeta?.healthPath ?? '/health',
     test: input.test ?? [],
     nas: {
       host: input.nas?.host ?? '',
@@ -264,6 +285,24 @@ export async function initCommand(rl, options = {}) {
     }
     writeFile(file, content);
     okItem(`${file} ${existing ? '수정함' : '새로 만듦'}`);
+  }
+
+  // Dockerfile 은 프로젝트마다 다르므로, 없을 때만 종류에 맞는 초안을 만들어 줍니다.
+  const dockerfilePath = config.dockerfile.replace('${{ matrix.service }}', config.services[0].name).replace(/^\.\//, '');
+  if (config.projectType && !dockerfilePath.includes('${{') ) {
+    if (fs.existsSync(dockerfilePath)) {
+      skipItem(`${dockerfilePath} (이미 있음)`);
+    } else if (options.yes || (await confirm(rl, `${dockerfilePath} 초안을 만들까요? (${PROJECT_TYPES[config.projectType].label})`, true))) {
+      writeFile(dockerfilePath, renderDockerfile(config.projectType));
+      okItem(`${dockerfilePath} 새로 만듦`, '프로젝트에 맞게 확인하고 고쳐 주세요');
+      const build = tryBuild(dockerfilePath);
+      if (build.skipped) skipItem(build.skipped);
+      else if (build.ok) okItem('이미지 빌드 확인 완료');
+      else {
+        warnItem('이미지 빌드가 실패했습니다. Dockerfile 을 손봐야 합니다');
+        for (const line of build.message.split(String.fromCharCode(10))) note(line);
+      }
+    }
   }
 
   if (!readIfExists(ENV_PATH)) {
