@@ -21,6 +21,7 @@ export const GATE_SCRIPT_PATH = `${BASE_DIR}/deploy-gate.sh`;
 export const SECRET_NAMES = ['NAS_SSH_HOST', 'NAS_SSH_PORT', 'NAS_SSH_USER', 'NAS_SSH_PRIVATE_KEY', 'NAS_SSH_KNOWN_HOSTS'];
 export const ZERO_TAG = '0'.repeat(40);
 export const BAD_PASSWORD_MARK = 'NAS_DEPLOY_BAD_PASSWORD';
+export const INSTALL_FAILED_MARK = 'NAS_DEPLOY_INSTALL_FAILED';
 
 export class UserError extends Error {}
 
@@ -107,6 +108,7 @@ export function remote(config, script, { password = null, interactive = false } 
   if (result.error) throw new UserError(`NAS에 접속하지 못했습니다: ${result.error.message}`);
   const out = (result.stdout ?? '').replace(/\r/g, '');
   if (out.includes(BAD_PASSWORD_MARK)) throw new UserError('NAS 관리자 비밀번호가 맞지 않습니다. 다시 실행해 주세요.');
+  if (out.includes(INSTALL_FAILED_MARK)) throw new UserError('NAS 설치 명령이 실패했습니다. NAS 관리자 권한과 설치 폴더를 확인해 주세요.');
   if (result.status !== 0 && !out) {
     throw new UserError(`NAS 접속이 실패했습니다 (종료 코드 ${result.status}). 주소와 포트, 계정을 확인해 주세요.`);
   }

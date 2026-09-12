@@ -1,11 +1,42 @@
-// nas - NAS에 배포 스크립트, compose 파일, .env, 권한 규칙을 한 번에 설치합니다.
+// nas - Install deployment scripts, compose, .env, and privilege rules on NAS.
 import fs from 'node:fs';
 import { askNasPassword } from './ask.mjs';
 import {
-  COMPOSE_PATH, DEPLOY_SCRIPT_PATH, ENV_PATH, GATE_SCRIPT_PATH, REMOTE_STAGE, UserError,
+  COMPOSE_PATH, DEPLOY_SCRIPT_PATH, ENV_PATH, GATE_SCRIPT_PATH, INSTALL_FAILED_MARK, REMOTE_STAGE, UserError,
   filePayload, loadConfig, nasDir, readIfExists, remote, shellQuote, usesAdminKey
 } from './core.mjs';
 import { badItem, bold, confirm, cyan, detail, dim, heading, note, okItem, panel, skipItem, warnItem } from './ui.mjs';
+
+export function buildInstallScript(config, files, envText) {
+  const dir = nasDir(config);
+  const privileged = [
+    'set -e',
+    `mkdir -p ${dir}/bin ${dir}/data ${dir}/.unused`,
+    `install -o root -g root -m 700 ${REMOTE_STAGE}/deploy.sh ${dir}/bin/deploy.sh`,
+    `install -o root -g root -m 755 ${REMOTE_STAGE}/deploy-gate.sh ${dir}/bin/deploy-gate.sh`,
+    `install -o root -g root -m 644 ${REMOTE_STAGE}/compose.yaml ${dir}/compose.yaml`,
+    ...(envText !== null
+      ? [
+          `sed 's/\\r$//; s/\\x1b\\[20[01]~//g' ${REMOTE_STAGE}/env-file > ${REMOTE_STAGE}/env-file.cleaned`,
+          `install -o root -g root -m 600 ${REMOTE_STAGE}/env-file.cleaned ${dir}/.env`
+        ]
+      : []),
+    `echo ${shellQuote(`${config.nas.deployUser} ALL=(root) NOPASSWD: ${dir}/bin/deploy.sh`)} > /etc/sudoers.d/${config.project}-deploy`,
+    `chmod 440 /etc/sudoers.d/${config.project}-deploy`,
+    `echo "SUDO=$(sudo -l -U ${config.nas.deployUser} 2>/dev/null | grep -c ${shellQuote(`${dir}/bin/deploy.sh`)})"`,
+    `if /usr/local/bin/docker-compose version >/dev/null 2>&1; then echo "COMPOSE=ok"; elif /usr/local/bin/docker compose version >/dev/null 2>&1; then echo "COMPOSE=ok"; else echo "COMPOSE=missing"; fi`,
+    `echo "GATE=$(stat -c %a ${dir}/bin/deploy-gate.sh)"`,
+    `echo "SCRIPT=$(stat -c %a ${dir}/bin/deploy.sh)"`,
+    `echo "ENVMODE=$(stat -c %a ${dir}/.env 2>/dev/null || echo none)`
+  ].join('\n');
+
+  return [
+    filePayload(files),
+    `trap 'rm -rf ${REMOTE_STAGE}' EXIT`,
+    `sed -i 's/\\r$//' ${REMOTE_STAGE}/deploy.sh ${REMOTE_STAGE}/deploy-gate.sh`,
+    `sudo -S -p '' sh -c ${shellQuote(privileged)} || { echo ${INSTALL_FAILED_MARK}; exit 10; }`
+  ].join('\n');
+}
 
 export async function nasCommand(rl) {
   const config = loadConfig();
@@ -38,33 +69,8 @@ export async function nasCommand(rl) {
   };
   if (envText !== null) files['env-file'] = envText;
 
-  const install = [
-    'set -e',
-    filePayload(files),
-    `sudo mkdir -p ${dir}/bin ${dir}/data ${dir}/.unused`,
-    `sed -i 's/\\r$//' ${REMOTE_STAGE}/deploy.sh ${REMOTE_STAGE}/deploy-gate.sh`,
-    `sudo install -o root -g root -m 700 ${REMOTE_STAGE}/deploy.sh ${dir}/bin/deploy.sh`,
-    `sudo install -o root -g root -m 755 ${REMOTE_STAGE}/deploy-gate.sh ${dir}/bin/deploy-gate.sh`,
-    `sudo install -o root -g root -m 644 ${REMOTE_STAGE}/compose.yaml ${dir}/compose.yaml`,
-    `sudo chmod 755 ${dir}`,
-    ...(envText !== null
-      ? [
-          `sed 's/\\r$//; s/\\x1b\\[20[01]~//g' ${REMOTE_STAGE}/env-file | sudo tee ${dir}/.env > /dev/null`,
-          `sudo chmod 600 ${dir}/.env`
-        ]
-      : []),
-    `echo ${shellQuote(`${config.nas.deployUser} ALL=(root) NOPASSWD: ${dir}/bin/deploy.sh`)} | sudo tee /etc/sudoers.d/${config.project}-deploy > /dev/null`,
-    `sudo chmod 440 /etc/sudoers.d/${config.project}-deploy`,
-    `rm -rf ${REMOTE_STAGE}`,
-    `echo "SUDO=$(sudo -l -U ${config.nas.deployUser} 2>/dev/null | grep -c ${shellQuote(`${dir}/bin/deploy.sh`)})"`,
-    'echo "COMPOSE=$(sudo docker compose version >/dev/null 2>&1 && echo ok || echo missing)"',
-    `echo "GATE=$(sudo stat -c %a ${dir}/bin/deploy-gate.sh)"`,
-    `echo "SCRIPT=$(sudo stat -c %a ${dir}/bin/deploy.sh)"`,
-    `echo "ENVMODE=$(sudo stat -c %a ${dir}/.env 2>/dev/null || echo none)"`
-  ].join('\n');
-
   heading('설치 중');
-  const { out } = remote(config, install, { password });
+  const { out } = remote(config, buildInstallScript(config, files, envText), { password });
   const value = (name) => new RegExp(`${name}=(\\S+)`).exec(out)?.[1];
 
   if (Number(value('SUDO') ?? 0) > 0) okItem('배포 계정이 배포 스크립트를 관리자 권한으로 실행할 수 있습니다');
