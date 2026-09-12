@@ -6,7 +6,25 @@ import {
   capture, deployKeyProbe, has, keyPathOf, knownHostsPath, loadConfig, nasDir, readIfExists, remote, usesAdminKey
 } from './core.mjs';
 import { githubState } from './github.mjs';
+import { repoViewArgs, secretListArgs } from './secrets.mjs';
 import { badItem, bold, cyan, detail, dim, heading, note, okItem, panel, skipItem, warnItem } from './ui.mjs';
+
+export function buildNasDoctorScript(config) {
+  const dir = nasDir(config);
+  return [
+    `if /usr/local/bin/docker-compose version >/dev/null 2>&1; then echo "COMPOSE=ok"; elif /usr/local/bin/docker compose version >/dev/null 2>&1; then echo "COMPOSE=ok"; else echo "COMPOSE=missing"; fi`,
+    `echo "DRI=$(ls /dev/dri >/dev/null 2>&1 && echo ok || echo none)"`,
+    `echo "GATE=$(stat -c %a ${dir}/bin/deploy-gate.sh 2>/dev/null || echo none)"`,
+    `echo "SCRIPT=$(stat -c %a ${dir}/bin/deploy.sh 2>/dev/null || echo none)"`,
+    `echo "COMPOSEFILE=$(stat -c %a ${dir}/compose.yaml 2>/dev/null || echo none)"`,
+    `echo "ENVMODE=$(sudo -n stat -c %a ${dir}/.env 2>/dev/null || echo none)"`,
+    `echo "ENVCTRL=$(sudo -n grep -c "$(printf '\\033')" ${dir}/.env 2>/dev/null || echo 0)"`,
+    `echo "SUDO=$(sudo -n -l -U ${config.nas.deployUser} 2>/dev/null | grep -c ${JSON.stringify(`${dir}/bin/deploy.sh`)})"`,
+    `echo "DISK=$(df -Pm ${dir} 2>/dev/null | awk 'NR==2{print $4}')"`,
+    `echo "CURRENT=$(sudo -n cat ${dir}/state/current-tag 2>/dev/null || echo none)"`,
+    `echo "RUNNING=$(sudo -n /usr/local/bin/docker ps --filter "label=com.docker.compose.project=${config.project}" -q 2>/dev/null | wc -l)"`
+  ].join('\n');
+}
 
 export async function doctorCommand(rl, options = {}) {
   const config = loadConfig();
@@ -68,9 +86,9 @@ export async function doctorCommand(rl, options = {}) {
 
   heading('3. GitHub');
   if (has('gh')) {
-    const repo = capture('gh', ['repo', 'view', '--json', 'nameWithOwner,visibility', '--jq', '.nameWithOwner + " " + .visibility']);
+    const repo = capture('gh', repoViewArgs(config));
     if (repo.code === 0) okItem('저장소', repo.out);
-    const list = capture('gh', ['secret', 'list']);
+    const list = capture('gh', secretListArgs(config));
     const missing = SECRET_NAMES.filter((name) => !list.out.includes(name));
     if (!missing.length) okItem('접속 정보 5개가 모두 등록되어 있습니다');
     else fail(`등록되지 않은 값: ${missing.join(', ')}`, '', '"nas-deploy secrets" 를 실행하세요.');
@@ -106,22 +124,11 @@ export async function doctorCommand(rl, options = {}) {
     heading('5. NAS 내부');
     if (!usesAdminKey(config)) detail('"nas-deploy login" 을 해 두면 다음부터 SSH 비밀번호를 묻지 않습니다.');
     const password = await askNasPassword(rl, config, { reason: 'NAS 안의 파일과 권한을 확인하기 위해' });
-    const script = [
-      `echo "COMPOSE=$(sudo docker compose version >/dev/null 2>&1 && echo ok || echo missing)"`,
-      `echo "DRI=$(ls /dev/dri >/dev/null 2>&1 && echo ok || echo none)"`,
-      `echo "GATE=$(sudo stat -c %a ${dir}/bin/deploy-gate.sh 2>/dev/null || echo none)"`,
-      `echo "SCRIPT=$(sudo stat -c %a ${dir}/bin/deploy.sh 2>/dev/null || echo none)"`,
-      `echo "COMPOSEFILE=$(sudo stat -c %a ${dir}/compose.yaml 2>/dev/null || echo none)"`,
-      `echo "ENVMODE=$(sudo stat -c %a ${dir}/.env 2>/dev/null || echo none)"`,
-      `echo "ENVCTRL=$(sudo grep -c "$(printf '\\033')" ${dir}/.env 2>/dev/null || echo 0)"`,
-      `echo "SUDO=$(sudo -l -U ${config.nas.deployUser} 2>/dev/null | grep -c ${JSON.stringify(`${dir}/bin/deploy.sh`)})"`,
-      `echo "AKREAD=$(sudo -u ${config.nas.deployUser} cat /var/services/homes/${config.nas.deployUser}/.ssh/authorized_keys >/dev/null 2>&1 && echo ok || echo denied)"`,
-      `echo "DISK=$(df -Pm ${dir} 2>/dev/null | awk 'NR==2{print $4}')"`,
-      `echo "CURRENT=$(sudo cat ${dir}/state/current-tag 2>/dev/null || echo none)"`,
-      `echo "RUNNING=$(sudo docker ps --filter "label=com.docker.compose.project=${config.project}" -q 2>/dev/null | wc -l)"`
-    ].join('\n');
+    const script = buildNasDoctorScript(config);
     const { out } = remote(config, script, { password });
-    const value = (name) => new RegExp(`${name}=(\\S+)`).exec(out)?.[1];
+    const value = (name) => name === 'AKREAD'
+      ? (shellMessage.includes('rejected request') ? 'ok' : 'denied')
+      : new RegExp(`${name}=(\\S+)`).exec(out)?.[1];
 
     if (value('COMPOSE') === 'ok') okItem('docker compose 사용 가능');
     else fail('docker compose 를 찾을 수 없습니다', '', 'Container Manager 가 설치·실행 중인지 확인하세요.');
