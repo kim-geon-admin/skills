@@ -2,23 +2,24 @@
 import fs from 'node:fs';
 import { askNasPassword } from './ask.mjs';
 import {
-  COMPOSE_PATH, DEPLOY_SCRIPT_PATH, ENV_PATH, GATE_SCRIPT_PATH, INSTALL_FAILED_MARK, REMOTE_STAGE, UserError,
-  filePayload, loadConfig, nasDir, readIfExists, remote, shellQuote, usesAdminKey
+  COMPOSE_PATH, DEPLOY_SCRIPT_PATH, ENV_PATH, GATE_SCRIPT_PATH, INSTALL_FAILED_MARK, UserError,
+  filePayload, loadConfig, nasDir, readIfExists, remote, remoteStageFor, shellQuote, usesAdminKey
 } from './core.mjs';
 import { badItem, bold, confirm, cyan, detail, dim, heading, note, okItem, panel, skipItem, warnItem } from './ui.mjs';
 
 export function buildInstallScript(config, files, envText) {
   const dir = nasDir(config);
+  const stage = remoteStageFor(config);
   const privileged = [
     'set -e',
     `mkdir -p ${dir}/bin ${dir}/data ${dir}/.unused`,
-    `install -o root -g root -m 700 ${REMOTE_STAGE}/deploy.sh ${dir}/bin/deploy.sh`,
-    `install -o root -g root -m 755 ${REMOTE_STAGE}/deploy-gate.sh ${dir}/bin/deploy-gate.sh`,
-    `install -o root -g root -m 644 ${REMOTE_STAGE}/compose.yaml ${dir}/compose.yaml`,
+    `install -o root -g root -m 700 ${stage}/deploy.sh ${dir}/bin/deploy.sh`,
+    `install -o root -g root -m 755 ${stage}/deploy-gate.sh ${dir}/bin/deploy-gate.sh`,
+    `install -o root -g root -m 644 ${stage}/compose.yaml ${dir}/compose.yaml`,
     ...(envText !== null
       ? [
-          `sed 's/\\r$//; s/\\x1b\\[20[01]~//g' ${REMOTE_STAGE}/env-file > ${REMOTE_STAGE}/env-file.cleaned`,
-          `install -o root -g root -m 600 ${REMOTE_STAGE}/env-file.cleaned ${dir}/.env`
+          `sed 's/\\r$//; s/\\x1b\\[20[01]~//g' ${stage}/env-file > ${stage}/env-file.cleaned`,
+          `install -o root -g root -m 600 ${stage}/env-file.cleaned ${dir}/.env`
         ]
       : []),
     `echo ${shellQuote(`${config.nas.deployUser} ALL=(root) NOPASSWD: ${dir}/bin/deploy.sh`)} > /etc/sudoers.d/${config.project}-deploy`,
@@ -31,9 +32,9 @@ export function buildInstallScript(config, files, envText) {
   ].join('\n');
 
   return [
-    filePayload(files),
-    `trap 'rm -rf ${REMOTE_STAGE}' EXIT`,
-    `sed -i 's/\\r$//' ${REMOTE_STAGE}/deploy.sh ${REMOTE_STAGE}/deploy-gate.sh`,
+    filePayload(files, stage),
+    `trap 'rm -rf ${stage}' EXIT`,
+    `sed -i 's/\\r$//' ${stage}/deploy.sh ${stage}/deploy-gate.sh`,
     `sudo -S -p '' sh -c ${shellQuote(privileged)} || { echo ${INSTALL_FAILED_MARK}; exit 10; }`
   ].join('\n');
 }

@@ -5,6 +5,7 @@ import { buildInstallScript } from './nas.mjs';
 const config = {
   project: 'ghdeploytest',
   nas: {
+    adminUser: 'nayaguny',
     deployUser: 'gh-deploy',
     dir: '/volume1/docker/ghdeploytest'
   }
@@ -18,5 +19,7 @@ test('builds NAS installation as one password-fed root shell', () => {
   }, 'APP_MESSAGE=hello\n');
 
   assert.match(script, /sudo -S -p '' sh -c/);
+  assert.match(script, /\/var\/services\/homes\/nayaguny\/.nas-deploy-upload\/deploy\.sh/);
+  assert.doesNotMatch(script, /\$HOME\/\.nas-deploy-upload|\/root\/\.nas-deploy-upload/);
   assert.doesNotMatch(script, /sudo mkdir|sudo install|sudo chmod|sudo tee/);
 });

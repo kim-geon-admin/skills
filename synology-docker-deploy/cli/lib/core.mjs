@@ -81,6 +81,7 @@ export const knownHostsPath = (config) => path.join(path.dirname(keyPathOf(confi
 export const adminTarget = (config) => `${config.nas.adminUser}@${config.nas.host}`;
 export const deployTarget = (config) => `${config.nas.deployUser}@${config.nas.host}`;
 export const REMOTE_STAGE = '$HOME/.nas-deploy-upload';
+export const remoteStageFor = (config) => `/var/services/homes/${config.nas.adminUser}/.nas-deploy-upload`;
 
 // ---------- NAS 접속 ----------
 // 접속 방식은 두 가지입니다.
@@ -116,11 +117,11 @@ export function remote(config, script, { password = null, interactive = false } 
 }
 
 // 파일을 같은 접속으로 함께 보냅니다. scp(SFTP)를 쓰지 않으므로 접속과 비밀번호 입력이 한 번으로 끝납니다.
-export function filePayload(files) {
-  const lines = [`rm -rf ${REMOTE_STAGE}`, `mkdir -p ${REMOTE_STAGE}`];
+export function filePayload(files, stage = REMOTE_STAGE) {
+  const lines = [`rm -rf ${stage}`, `mkdir -p ${stage}`];
   for (const [name, content] of Object.entries(files)) {
     const packed = zlib.gzipSync(Buffer.from(content, 'utf8')).toString('base64');
-    lines.push(`printf '%s' '${packed}' | base64 -d | gzip -d > ${REMOTE_STAGE}/${name}`);
+    lines.push(`printf '%s' '${packed}' | base64 -d | gzip -d > ${stage}/${name}`);
   }
   return lines.join('\n');
 }
