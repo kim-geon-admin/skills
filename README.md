@@ -77,6 +77,8 @@ npm install -g github:kim-geon-admin/skills
 nas-deploy help
 ```
 
+`nas-deploy secrets`는 프로젝트 설정의 `owner/project` 저장소를 자동 지정해 NAS 접속용 GitHub Actions Secret 5개를 직접 등록하고 결과를 확인합니다. 별도로 `gh secret set` 명령을 입력할 필요가 없습니다.
+
 설치 후에는 프로젝트 저장소 폴더에서 `nas-deploy init`부터 실행합니다. CLI는
 `synology-docker-deploy` 스킬 파일과 함께 설치되며, 별도 의존성이 필요하지 않습니다.
 

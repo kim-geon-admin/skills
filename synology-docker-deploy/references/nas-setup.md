@@ -282,6 +282,13 @@ printf '[나의NAS도메인]:나의SSH포트 %s\n' "$(cut -d' ' -f1,2 /etc/ssh/s
 
 ## 9. GitHub Secrets
 
+**권장: PC · 저장소 폴더 | 대화형 CLI**
+```bash
+nas-deploy secrets
+```
+CLI가 설정 파일의 `owner/project` 저장소를 자동 지정하고, NAS 접속용 Secret 5개를 직접 등록한 뒤 결과를 확인합니다.
+따라서 아래의 `gh secret set` 명령을 수동으로 입력할 필요가 없습니다. GitHub 로그인이 안 되어 있으면 브라우저 인증만 진행합니다.
+
 **PC · Git Bash | 한꺼번에** (8단계의 `nas_known_hosts`가 있는 저장소 루트에서)
 ```bash
 cd /d/나의저장소경로

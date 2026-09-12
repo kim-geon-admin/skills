@@ -5,8 +5,16 @@ import { SECRET_NAMES, UserError, capture, keyPathOf, knownHostsPath, loadConfig
 import { ensureGitHubLogin, ensureWorkflowScope } from './github.mjs';
 import { badItem, bold, confirm, cyan, detail, dim, heading, note, okItem, panel, skipItem, warnItem } from './ui.mjs';
 
-function setSecret(name, value) {
-  const result = spawnSync('gh', ['secret', 'set', name], { input: value, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+export const githubRepo = (config) => `${config.owner}/${config.project}`;
+export const secretSetArgs = (config, name) => ['secret', 'set', name, '--repo', githubRepo(config)];
+export const secretListArgs = (config) => ['secret', 'list', '--repo', githubRepo(config)];
+export const repoViewArgs = (config) => [
+  'repo', 'view', '--repo', githubRepo(config), '--json', 'nameWithOwner,visibility',
+  '--jq', '.nameWithOwner + " (" + .visibility + ")"'
+];
+
+function setSecret(config, name, value) {
+  const result = spawnSync('gh', secretSetArgs(config, name), { input: value, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
   return { code: result.status ?? 1, err: (result.stderr ?? '').trim() };
 }
 
@@ -17,7 +25,7 @@ export async function secretsCommand(rl) {
   if (!state.loggedIn) throw new UserError('GitHub 로그인이 필요합니다. 다시 실행하면 로그인 화면을 띄워 드립니다.');
   await ensureWorkflowScope(rl, state);
 
-  const repo = capture('gh', ['repo', 'view', '--json', 'nameWithOwner,visibility', '--jq', '.nameWithOwner + " (" + .visibility + ")"']);
+  const repo = capture('gh', repoViewArgs(config));
   const keyPath = keyPathOf(config);
   const hostsPath = knownHostsPath(config);
 
@@ -52,7 +60,7 @@ export async function secretsCommand(rl) {
   heading('등록');
   let failed = 0;
   for (const name of SECRET_NAMES) {
-    const result = setSecret(name, values[name]);
+    const result = setSecret(config, name, values[name]);
     if (result.code === 0) okItem(`${name} 등록 완료`);
     else {
       failed += 1;
@@ -60,7 +68,7 @@ export async function secretsCommand(rl) {
     }
   }
 
-  const list = capture('gh', ['secret', 'list']);
+  const list = capture('gh', secretListArgs(config));
   const registered = SECRET_NAMES.filter((name) => list.out.includes(name));
   if (registered.length === SECRET_NAMES.length) okItem('5개 모두 저장소에 등록되어 있습니다');
   else warnItem(`등록된 값이 ${registered.length}개입니다`, `빠진 값: ${SECRET_NAMES.filter((name) => !registered.includes(name)).join(', ')}`);
