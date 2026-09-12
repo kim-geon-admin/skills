@@ -43,25 +43,35 @@ export const PROJECT_TYPES = {
     healthCheck: 'node',
     healthPath: '/health',
     render: () => {
-      const scripts = packageJson().scripts ?? {};
-      const start = scripts.start ? 'npm run start' : 'node server.js';
+      const pkg = packageJson();
+      const scripts = pkg.scripts ?? {};
+      const start = scripts.start ? "npm run start" : "node server.js";
+      const hasDeps = Object.keys(pkg.dependencies ?? {}).length > 0;
+      const hasLock = fs.existsSync("package-lock.json");
+      // 잠금 파일이 있으면 npm ci, 없으면 npm install 을 씁니다. 의존성이 없으면 설치 단계를 넣지 않습니다.
+      const install = hasDeps
+        ? [
+            "FROM node:22-bookworm-slim AS deps",
+            "WORKDIR /app",
+            hasLock ? "COPY package*.json ./" : "COPY package.json ./",
+            hasLock ? "RUN npm ci --omit=dev" : "RUN npm install --omit=dev",
+            ""
+          ]
+        : [];
+      const copyModules = hasDeps ? ["COPY --from=deps /app/node_modules ./node_modules"] : [];
       return [
-        '# 1단계: 의존성 설치, 2단계: 실행에 필요한 것만 담기',
-        'FROM node:22-bookworm-slim AS deps',
-        'WORKDIR /app',
-        'COPY package*.json ./',
-        'RUN npm ci --omit=dev',
-        '',
-        'FROM node:22-bookworm-slim',
-        'WORKDIR /app',
-        'ENV NODE_ENV=production',
-        'COPY --from=deps /app/node_modules ./node_modules',
-        'COPY . .',
-        'USER node',
-        'EXPOSE 3000',
-        `CMD ${JSON.stringify(start.split(' '))}`,
-        ''
-      ].join('\n');
+        "# 의존성 설치와 실행을 나눠, 실행 이미지에는 필요한 것만 담습니다.",
+        ...install,
+        "FROM node:22-bookworm-slim",
+        "WORKDIR /app",
+        "ENV NODE_ENV=production",
+        ...copyModules,
+        "COPY . .",
+        "USER node",
+        "EXPOSE 3000",
+        `CMD ${JSON.stringify(start.split(" "))}`,
+        ""
+      ].join(String.fromCharCode(10));
     }
   },
   next: {
