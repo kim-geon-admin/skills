@@ -31,7 +31,7 @@ Existing values are offered as defaults on a later `init` run. A new configurati
 `init` asks for the deployment account name but does not assume that the account exists. `prepare` connects to the NAS with the DSM administrator and checks the selected account before any public key is registered.
 
 - When the account exists, the CLI shows its username, administrator-group membership, SSH shell, home-directory access, and deployment-directory access. It asks whether to use that existing account; choosing no returns the user to `init` to choose a different account name.
-- When the account is absent, the CLI does not create it through unsupported Synology internals. It shows the DSM Control Panel path and the exact account name to create, then stops before `key` or `nas` can change that account.
+- When the account is absent, the CLI does not create it through unsupported Synology internals. It shows the DSM Control Panel path and the exact account name to create, waits for the user to confirm creation, and immediately re-runs the NAS account, group, shell, home-directory, and deployment-directory checks. `key` and `nas` remain blocked until that recheck succeeds.
 - Existing accounts, their other SSH keys, and their unrelated project access are never overwritten or removed by this choice.
 
 ## Route Copy
@@ -77,7 +77,7 @@ The NAS directory is always user input. Prompt copy may use examples such as `/v
 
 - Reject empty host, administrator account, deployment account, NAS directory, and key path.
 - Reject generic placeholders such as `나의 도메인`, `NAS 내부 IP`, and angle-bracket template text when used as real values.
-- Require an explicit choice to use an existing deployment account; block later setup steps when the selected account does not exist.
+- Require an explicit choice to use an existing deployment account; when the account is missing, require a successful post-creation recheck before later setup steps can continue.
 - Preserve existing configuration values on re-run unless the user replaces them.
 - Do not add passwords or private-key material to project files, console summaries, or Git.
 
