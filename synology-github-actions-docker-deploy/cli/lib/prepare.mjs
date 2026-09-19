@@ -4,6 +4,23 @@ import { askNasPassword } from './ask.mjs';
 import { loadConfig, nasDir, remote, usesAdminKey } from './core.mjs';
 import { badItem, bold, confirm, cyan, detail, dim, heading, note, okItem, panel, skipItem, warnItem } from './ui.mjs';
 
+export function deploymentAccountState(values) {
+  if (values.USER === 'missing') return 'missing';
+  const shellReady = Boolean(values.SHELL) && !values.SHELL.includes('nologin');
+  const ready = values.USER === 'ok' && values.GROUP === 'ok' && shellReady
+    && values.HOME === 'ok' && values.HOMEACCESS === 'ok' && values.DOCKERSHARE === 'ok';
+  return ready ? 'ready' : 'incomplete';
+}
+
+export function deploymentAccountGuide(config) {
+  return [
+    'DSM 화면에서 배포 전용 계정을 확인하거나 만들어 주세요.',
+    `제어판 → 사용자 및 그룹 → 사용자 생성 → 이름 ${config.nas.deployUser}`,
+    '그룹: administrators, 사용자 홈 서비스: 활성화',
+    '권한: homes 액세스 불가 해제, 배포 폴더가 포함된 공유 폴더는 읽기/쓰기 권한'
+  ].join('\n');
+}
+
 function guide(config) {
   const dir = nasDir(config);
   panel('prepare - NAS 준비 상태 확인', [
@@ -55,8 +72,35 @@ export async function prepareCommand(rl) {
   ].join('\n');
 
   heading('확인 결과');
-  const { out } = remote(config, script, { password });
-  const value = (name) => new RegExp(`${name}=(\\S*)`).exec(out)?.[1] ?? '';
+  const probe = () => remote(config, script, { password });
+  const parseValues = (out) => Object.fromEntries(
+    ['USER', 'GROUP', 'SHELL', 'HOME', 'HOMEACCESS', 'DOCKERSHARE', 'COMPOSE', 'SUDOERSDIR', 'DRI', 'DISK']
+      .map((name) => [name, new RegExp(`${name}=(\\S*)`).exec(out)?.[1] ?? ''])
+  );
+  let values = parseValues(probe().out);
+  let accountState = deploymentAccountState(values);
+  if (accountState === 'missing') {
+    badItem(`배포 계정 ${user} 이(가) 없습니다`);
+    note(deploymentAccountGuide(config).split('\n').join(' / '));
+    if (!(await confirm(rl, `DSM에서 ${user} 계정을 만든 뒤 다시 검사할까요?`, true))) {
+      note('계정 생성 후 다시 "nas-deploy prepare" 를 실행해 주세요.');
+      return;
+    }
+    values = parseValues(probe().out);
+    accountState = deploymentAccountState(values);
+    if (accountState !== 'ready') {
+      panel('배포 계정 재확인 실패', [
+        `${user} 계정이 아직 배포에 필요한 상태가 아닙니다.`,
+        'DSM에서 계정과 권한을 확인한 뒤 다시 실행해 주세요.'
+      ]);
+      return;
+    }
+  }
+  if (accountState === 'ready' && !(await confirm(rl, `기존 배포 계정 ${user}를 사용하시겠습니까?`, true))) {
+    note(`다른 계정을 사용하려면 "nas-deploy init" 에서 배포 전용 계정 이름을 바꾼 뒤 다시 실행해 주세요.`);
+    return;
+  }
+  const value = (name) => values[name] ?? '';
   const problems = [];
   const fail = (text, advice) => { badItem(text); if (advice) note(advice); problems.push(text); };
 
