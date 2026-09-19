@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildEnv, connectionRoute, withDefaults } from './init.mjs';
+import { buildEnv, configurationSummary, connectionRoute, routeExamples, validateDeploymentConfig, withDefaults } from './init.mjs';
 
 test('init persists the selected temporary password mode and preserves admin key', () => {
   const config = withDefaults({
@@ -44,4 +44,39 @@ test('records the Synology internal IP route without an external URL', () => {
   assert.equal(config.network.publicUrl, '');
   assert.match(connectionRoute(config), /^192\.168\.0\.20:3333.*3000/);
   assert.match(buildEnv(config), /HTTP_BIND=192\.168\.0\.20:3333/);
+});
+
+test('does not assume a NAS directory for a new configuration', () => {
+  const config = withDefaults({ project: 'demo', owner: 'owner' });
+  assert.equal(config.nas.dir, '');
+  assert.throws(() => validateDeploymentConfig(config), /NAS 배포 폴더/);
+});
+
+test('explains reverse proxy and internal-only routes separately', () => {
+  const examples = routeExamples();
+  assert.match(examples.reverseProxy, /나의 도메인:포트번호/);
+  assert.match(examples.reverseProxy, /127\.0\.0\.1:Synology Docker 연결 포트/);
+  assert.match(examples.internalOnly, /NAS 내부 IP/);
+  assert.match(examples.internalOnly, /127\.0\.0\.1은 NAS 자신/);
+});
+
+test('shows resolved local key and configured NAS directory in its summary', () => {
+  const config = withDefaults({
+    project: 'demo',
+    owner: 'owner',
+    keyPath: '~/.ssh/demo_deploy',
+    nas: { host: 'nas.example.test', port: 2233, adminUser: 'admin', deployUser: 'gh-deploy', dir: '/volume2/apps/demo' }
+  });
+  const summary = configurationSummary(config);
+  assert.match(summary, /[\\/]\.ssh[\\/]demo_deploy/);
+  assert.match(summary, /\/volume2\/apps\/demo \(nas\.example\.test:2233\)/);
+});
+
+test('rejects generic placeholders used as NAS values', () => {
+  assert.throws(() => validateDeploymentConfig(withDefaults({
+    project: 'demo',
+    owner: 'owner',
+    keyPath: '~/.ssh/demo_deploy',
+    nas: { host: '나의 도메인', adminUser: 'admin', deployUser: 'gh-deploy', dir: '<NAS 배포 폴더>' }
+  })), /실제 값/);
 });

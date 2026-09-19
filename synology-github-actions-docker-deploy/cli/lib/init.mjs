@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   CONFIG_PATH, COMPOSE_PATH, DEPLOY_SCRIPT_PATH, ENV_PATH, GATE_SCRIPT_PATH, TEMPLATE_DIR, WORKFLOW_PATH,
-  capture, ensureIgnored, expandHome, has, imagePrefix, loadConfig, readIfExists, saveConfig, writeFile
+  capture, ensureIgnored, expandHome, has, imagePrefix, keyPathOf, loadConfig, readIfExists, saveConfig, writeFile
 } from './core.mjs';
 import { ask, badItem, bold, confirm, cyan, detail, dim, heading, note, okItem, panel, skipItem, step, warnItem } from './ui.mjs';
 import { PROJECT_TYPES, detectProjectType, renderDockerfile, tryBuild } from './dockerfile.mjs';
@@ -118,6 +118,44 @@ export function connectionRoute(config) {
   return `${url}:${config.network?.publicPort ?? 443} → ${docker} → ${container}`;
 }
 
+export function routeExamples() {
+  return {
+    reverseProxy: '역방향 프록시: 나의 도메인:포트번호 → 127.0.0.1:Synology Docker 연결 포트 → 실제 컨테이너 포트',
+    internalOnly: '내부 전용: NAS 내부 IP:Synology Docker 연결 포트 → 실제 컨테이너 포트 (127.0.0.1은 NAS 자신에서만 접근)'
+  };
+}
+
+function isPlaceholder(value) {
+  const text = String(value ?? '').trim();
+  return !text || /<[^>]+>|나의 도메인|나의도메인|예:\s|example\.(com|test)|Synology Docker/i.test(text);
+}
+
+export function validateDeploymentConfig(config) {
+  const required = [
+    ['NAS 배포 폴더', config.nas?.dir],
+    ['NAS 주소', config.nas?.host],
+    ['DSM 관리자 계정', config.nas?.adminUser],
+    ['배포 전용 계정', config.nas?.deployUser],
+    ['배포용 열쇠 경로', config.keyPath]
+  ];
+  for (const [label, value] of required) {
+    if (!String(value ?? '').trim()) throw new Error(`${label}을(를) 입력해야 합니다.`);
+    if (isPlaceholder(value)) throw new Error(`${label}에 실제 값을 입력해야 합니다.`);
+  }
+  return config;
+}
+
+export function configurationSummary(config) {
+  const dir = config.nas?.dir || '(NAS 배포 폴더 미입력)';
+  const host = config.nas?.host || '(NAS 주소 미입력)';
+  const port = config.nas?.port || '(SSH 포트 미입력)';
+  return [
+    `NAS 배포 폴더: ${dir} (${host}:${port})`,
+    `배포용 열쇠: ${keyPathOf(config)}`,
+    `배포 계정: ${config.nas?.deployUser || '(배포 계정 미입력)'}`
+  ].join('\n');
+}
+
 export function buildEnv(config) {
   const bindHost = config.network?.bindHost ?? '127.0.0.1';
   return [
@@ -179,8 +217,9 @@ async function askConfig(rl, previous) {
 
   heading('4. 접속 경로와 포트');
   detail('먼저 외부 역방향 프록시인지, 로컬 네트워크 내부 전용인지 선택합니다.');
-  detail('역방향 프록시: 나의 도메인:포트번호 → 127.0.0.1:Synology Docker 연결 포트 → 컨테이너 포트');
-  detail('내부 전용: 127.0.0.1:3200 또는 Synology 내부 IP:3200 → 컨테이너 포트');
+  const examples = routeExamples();
+  detail(examples.reverseProxy);
+  detail(examples.internalOnly);
   const mode = normalizeAccessMode(await ask(rl, '접속 방식 (reverse-proxy/internal)', previous?.network?.mode ?? 'reverse-proxy'));
   let publicUrl = '';
   let publicPort = 443;
@@ -224,8 +263,9 @@ async function askConfig(rl, previous) {
   detail('NAS에 SSH로 들어갈 때 쓰는 본인 DSM 관리자 계정입니다.');
   const adminUser = await ask(rl, 'DSM 관리자 계정', previous?.nas?.adminUser ?? '');
   detail('배포 전용 계정입니다. 이 계정의 키는 배포 명령 하나만 실행할 수 있습니다.');
-  const deployUser = await ask(rl, '배포 전용 계정', previous?.nas?.deployUser ?? 'gh-deploy');
-  const dir = await ask(rl, 'NAS 배포 폴더', previous?.nas?.dir ?? `/volume1/docker/${project}`);
+  const deployUser = await ask(rl, '배포 전용 계정', previous?.nas?.deployUser ?? '');
+  detail('예: /volume2/apps/나의프로젝트 — 실제 NAS 볼륨과 폴더를 입력하세요. 이 값은 자동으로 추측하지 않습니다.');
+  const dir = await ask(rl, 'NAS 배포 폴더', previous?.nas?.dir ?? '');
 
   heading('8. DSM 관리자 비밀번호 입력 방식');
   detail('매번 입력(prompt) = 각 명령을 실행할 때마다 PowerShell에서 비밀번호를 입력합니다.');
@@ -283,8 +323,8 @@ export function withDefaults(input) {
       host: input.nas?.host ?? '',
       port: Number(input.nas?.port ?? 22),
       adminUser: input.nas?.adminUser ?? '',
-      deployUser: input.nas?.deployUser ?? 'gh-deploy',
-      dir: input.nas?.dir ?? `/volume1/docker/${project}`,
+      deployUser: input.nas?.deployUser ?? '',
+      dir: input.nas?.dir ?? '',
       passwordMode: normalizePasswordMode(input.nas?.passwordMode),
       adminKey: input.nas?.adminKey ?? null
     },
@@ -310,7 +350,7 @@ export async function initCommand(rl, options = {}) {
   } else {
     config = await askConfig(rl, previous);
   }
-  if (!config.nas.host || !config.nas.adminUser) throw new Error('NAS 주소와 DSM 관리자 계정은 반드시 입력해야 합니다.');
+  validateDeploymentConfig(config);
 
   heading('파일 만들기');
   const workflowBase = buildWorkflow(config);
@@ -381,6 +421,7 @@ export async function initCommand(rl, options = {}) {
       : '같은 로컬 네트워크의 기기는 Synology 내부 IP와 Docker 연결 포트로 접속하세요.',
     `HTTP_BIND=${config.network.bindHost}:${config.hostPort}`
   ]);
+  panel('입력한 배포 설정 확인', configurationSummary(config).split('\n'));
 
   const nextSteps = config.nas.passwordMode === 'temporary'
     ? [
