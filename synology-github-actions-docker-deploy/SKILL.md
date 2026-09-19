@@ -168,7 +168,7 @@ CLI를 전역 설치했다면 별칭 없이 모든 프로젝트에서 `nas-deplo
    | `__GHCR_OWNER__` | GitHub 소유자(소문자) | `나의깃허브계정` |
    | `SERVICES` | 빌드할 compose 서비스들 (워크플로 matrix와 동일) | `(app worker)` |
    | `__DOCKERFILE__` | 서비스별 Dockerfile 경로 | `infra/docker/${{ matrix.service }}.Dockerfile` |
-| `BACKUP_FILES` | 교체 전 복사할 호스트 파일 | `(/실제/NAS배포폴더/data/app.sqlite)` |
+   | `BACKUP_FILES` | 교체 전 복사할 호스트 파일 | `(/실제/NAS배포폴더/data/app.sqlite)` |
    | `__HOST_PORT__` | NAS loopback 포트 (역방향 프록시 대상) | `3100` |
 
 3. **템플릿 적용**: `templates/*`를 프로젝트의 `.github/workflows/deploy.yml`, `infra/synology/`, `.gitattributes`로

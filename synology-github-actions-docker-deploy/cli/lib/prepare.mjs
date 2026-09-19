@@ -17,7 +17,7 @@ export function deploymentAccountGuide(config) {
     'DSM 화면에서 배포 전용 계정을 확인하거나 만들어 주세요.',
     `제어판 → 사용자 및 그룹 → 사용자 생성 → 이름 ${config.nas.deployUser}`,
     '그룹: administrators, 사용자 홈 서비스: 활성화',
-    '권한: homes 액세스 불가 해제, 배포 폴더가 포함된 공유 폴더는 읽기/쓰기 권한'
+    '권한: homes 액세스 불가 해제, 배포 폴더가 포함된 공유 폴더는 읽기 전용 권한'
   ].join('\n');
 }
 
