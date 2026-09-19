@@ -85,9 +85,11 @@ temporary 모드는 Windows DPAPI로 암호화한 임시 파일을 세션 동안
 관계없이 세션이 끝나면 자동 삭제합니다.
 
 같은 `init` 단계에서 앱 접속 방식과 포트를 구분해 입력합니다. 역방향 프록시면
-`외부 URL:외부 포트 → 127.0.0.1:Synology Docker 연결 포트 → 실제 컨테이너 포트`,
-내부 전용이면 `Synology 내부 IP:Synology Docker 연결 포트 → 실제 컨테이너 포트`로
+`나의 도메인:포트번호 → 127.0.0.1:Synology Docker 연결 포트 → 실제 컨테이너 포트`,
+내부 전용이면 `127.0.0.1:3200 또는 Synology 내부 IP:3200 → 실제 컨테이너 포트`로
 기록하고, 생성되는 `.env`의 `HTTP_BIND`에도 반영합니다.
+`127.0.0.1`은 NAS 자신 또는 NAS 역방향 프록시만 접근할 때 사용하고, 같은 네트워크의
+다른 기기에서 접근하려면 Synology 내부 IP를 사용합니다.
 
 테스트 후 이 프로젝트의 NAS 배포 흔적만 되돌리려면 프로젝트 폴더에서
 `nas-deploy cleanup`을 실행하세요. `gh-deploy` 계정과 다른 `authorized_keys` 줄,

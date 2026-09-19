@@ -110,11 +110,11 @@ export function normalizeAccessMode(value) {
 
 export function connectionRoute(config) {
   const mode = normalizeAccessMode(config.network?.mode);
-  const bindHost = config.network?.bindHost ?? (mode === 'reverse-proxy' ? '127.0.0.1' : '(시놀로지 내부 IP)');
+  const bindHost = config.network?.bindHost ?? (mode === 'reverse-proxy' ? '127.0.0.1' : '(127.0.0.1 또는 Synology 내부 IP)');
   const docker = `${bindHost}:${config.hostPort}`;
   const container = `컨테이너:${config.containerPort}`;
   if (mode === 'internal') return `${docker} → ${container}`;
-  const url = config.network?.publicUrl || '(외부 URL)';
+  const url = config.network?.publicUrl || '(나의 도메인)';
   return `${url}:${config.network?.publicPort ?? 443} → ${docker} → ${container}`;
 }
 
@@ -179,20 +179,20 @@ async function askConfig(rl, previous) {
 
   heading('4. 접속 경로와 포트');
   detail('먼저 외부 역방향 프록시인지, 로컬 네트워크 내부 전용인지 선택합니다.');
-  detail('역방향 프록시: 외부 URL:외부 포트 → 127.0.0.1:Synology Docker 포트 → 컨테이너 포트');
-  detail('내부 전용: Synology 내부 IP:Synology Docker 포트 → 컨테이너 포트');
+  detail('역방향 프록시: 나의 도메인:포트번호 → 127.0.0.1:Synology Docker 연결 포트 → 컨테이너 포트');
+  detail('내부 전용: 127.0.0.1:3200 또는 Synology 내부 IP:3200 → 컨테이너 포트');
   const mode = normalizeAccessMode(await ask(rl, '접속 방식 (reverse-proxy/internal)', previous?.network?.mode ?? 'reverse-proxy'));
   let publicUrl = '';
   let publicPort = 443;
   let bindHost = '';
   if (mode === 'reverse-proxy') {
-    publicUrl = await ask(rl, '외부 URL (포트 제외, 예: https://app.example.com)', previous?.network?.publicUrl ?? '');
-    publicPort = Number(await ask(rl, '외부 포트 (예: 443)', String(previous?.network?.publicPort ?? 443)));
+    publicUrl = await ask(rl, '외부 URL (예: https://나의도메인)', previous?.network?.publicUrl ?? '');
+    publicPort = Number(await ask(rl, '외부 포트 (예: 1001)', String(previous?.network?.publicPort ?? 443)));
     bindHost = '127.0.0.1';
     detail('역방향 프록시는 외부 URL을 Synology 역방향 프록시에서 아래 Docker 연결 포트로 연결하세요.');
   } else {
-    bindHost = await ask(rl, 'Synology 내부 IP (예: 192.168.0.20)', previous?.network?.bindHost ?? '');
-    detail('내부 전용은 같은 네트워크의 기기에서 위 내부 IP와 아래 Docker 연결 포트로 접속합니다.');
+    bindHost = await ask(rl, '바인딩 주소 (예: 127.0.0.1 또는 192.168.0.20)', previous?.network?.bindHost ?? '');
+    detail('127.0.0.1은 NAS 자신 또는 NAS 역방향 프록시만 접근합니다. 같은 네트워크 기기에서 접근하려면 Synology 내부 IP를 입력하세요.');
   }
   detail('Synology Docker 연결 포트입니다. 외부 포트/내부 접속 포트와 구분해서 입력하세요.');
   const hostPort = await ask(rl, 'Synology Docker 연결 포트', String(previous?.hostPort ?? 3100));
