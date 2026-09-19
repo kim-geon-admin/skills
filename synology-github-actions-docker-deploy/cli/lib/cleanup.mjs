@@ -24,7 +24,9 @@ export function buildCleanupScript(config) {
     'echo "DONE=ok"'
   ].join('\n');
 
-  return `sudo -S -p '' sh -c ${shellQuote(privileged)}`;
+  // remote() already authenticates sudo once through stdin. A second sudo -S
+  // would read from the exhausted SSH stdin and fail with "no password was provided".
+  return `sudo -p '' sh -c ${shellQuote(privileged)}`;
 }
 
 export async function cleanupCommand(rl) {
