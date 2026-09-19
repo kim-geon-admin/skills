@@ -7,6 +7,15 @@ import {
 } from './core.mjs';
 import { badItem, bold, confirm, cyan, detail, dim, heading, note, okItem, panel, skipItem, warnItem } from './ui.mjs';
 
+export function nasInstallSummary(config) {
+  const dir = nasDir(config);
+  return [
+    `설치 위치: ${dir} (${config.nas.host}:${config.nas.port})`,
+    `DSM 관리자: ${config.nas.adminUser}`,
+    `배포 계정: ${config.nas.deployUser}`
+  ].join('\n');
+}
+
 export function buildInstallScript(config, files, envText) {
   const dir = nasDir(config);
   const stage = remoteStageFor(config);
@@ -41,14 +50,13 @@ export function buildInstallScript(config, files, envText) {
 
 export async function nasCommand(rl) {
   const config = loadConfig();
-  const dir = nasDir(config);
   for (const file of [DEPLOY_SCRIPT_PATH, GATE_SCRIPT_PATH, COMPOSE_PATH]) {
     if (!fs.existsSync(file)) throw new UserError(`${file} 파일이 없습니다. 먼저 "nas-deploy init" 을 실행하세요.`);
   }
   const envText = readIfExists(ENV_PATH);
 
   panel('nas - NAS에 배포 준비물 설치하기', [
-    `설치 위치: ${dir}  ${dim(`(${config.nas.host})`)}`,
+    ...nasInstallSummary(config).split('\n'),
     '',
     '1) 배포 스크립트, compose 파일, .env 를 NAS로 보냅니다',
     '2) 관리자(root) 소유로 제자리에 놓고 권한을 맞춥니다',

@@ -13,6 +13,16 @@ export const repoViewArgs = (config) => [
   '--jq', '.nameWithOwner + " (" + .visibility + ")"'
 ];
 
+export function secretPreview(config) {
+  return {
+    NAS_SSH_HOST: config.nas.host,
+    NAS_SSH_PORT: String(config.nas.port),
+    NAS_SSH_USER: config.nas.deployUser,
+    NAS_SSH_PRIVATE_KEY: keyPathOf(config),
+    NAS_SSH_KNOWN_HOSTS: knownHostsPath(config)
+  };
+}
+
 function setSecret(config, name, value) {
   const result = spawnSync('gh', secretSetArgs(config, name), { input: value, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
   return { code: result.status ?? 1, err: (result.stderr ?? '').trim() };
@@ -48,8 +58,11 @@ export async function secretsCommand(rl) {
     NAS_SSH_PRIVATE_KEY: fs.readFileSync(keyPath, 'utf8'),
     NAS_SSH_KNOWN_HOSTS: fs.readFileSync(hostsPath, 'utf8')
   };
+  const preview = secretPreview(config);
   for (const name of SECRET_NAMES) {
-    const shown = name.includes('KEY') ? dim('(비밀 열쇠 파일 내용)') : name.includes('KNOWN') ? dim('(NAS 신분증)') : values[name];
+    const shown = name.includes('KEY') ? dim(`파일: ${preview[name]}`)
+      : name.includes('KNOWN') ? dim(`파일: ${preview[name]}`)
+        : preview[name];
     detail(`${name} = ${shown}`);
   }
   if (!(await confirm(rl, '이 값들을 등록할까요?', true))) {

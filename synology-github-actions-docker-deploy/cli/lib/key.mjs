@@ -10,6 +10,13 @@ import { badItem, bold, confirm, cyan, detail, dim, heading, note, okItem, panel
 const authorizedLine = (config, publicKey) =>
   `restrict,command="${nasDir(config)}/bin/deploy-gate.sh" ${publicKey.replace(/\r/g, '').trim()}`;
 
+export function keySummary(config) {
+  return [
+    `비밀 열쇠: ${keyPathOf(config)}`,
+    `NAS 배포 계정: ${config.nas.deployUser} (${config.nas.host}:${config.nas.port})`
+  ].join('\n');
+}
+
 function ensureKeyPair(config) {
   const keyPath = keyPathOf(config);
   if (fs.existsSync(keyPath)) {
@@ -49,6 +56,7 @@ export async function keyCommand(rl) {
     `2) 공개 열쇠를 NAS의 ${config.nas.deployUser} 계정에 등록합니다`,
     '3) 이 열쇠로는 배포 명령 하나만 실행되도록 잠급니다',
     '',
+    ...keySummary(config).split('\n'),
     usesAdminKey(config) ? '접속: 등록된 관리자 열쇠 사용 (SSH 비밀번호 없음)' : `접속: ${config.nas.adminUser}@${config.nas.host}`
   ]);
 
