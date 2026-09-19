@@ -24,9 +24,9 @@ export function buildCleanupScript(config) {
     'echo "DONE=ok"'
   ].join('\n');
 
-  // remote() already authenticates sudo once through stdin. A second sudo -S
-  // would read from the exhausted SSH stdin and fail with "no password was provided".
-  return `sudo -p '' sh -c ${shellQuote(privileged)}`;
+  // remote(..., { root: true }) wraps this whole script in one sudo call.
+  // Keeping the body root-only avoids consuming the SSH password more than once.
+  return privileged;
 }
 
 export async function cleanupCommand(rl) {
@@ -46,7 +46,7 @@ export async function cleanupCommand(rl) {
 
   const password = await askNasPassword(rl, config, { reason: '프로젝트 배포 흔적을 제거하기 위해' });
   heading('제거 중');
-  const { out } = remote(config, buildCleanupScript(config), { password });
+  const { out } = remote(config, buildCleanupScript(config), { password, root: true });
   const value = (name) => new RegExp(`${name}=(\\S+)`).exec(out)?.[1];
 
   if (value('DONE') === 'ok') okItem('프로젝트 배포 흔적을 제거했습니다');

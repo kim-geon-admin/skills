@@ -19,8 +19,8 @@ test('removes only this project deployment access and files', () => {
   assert.match(script, /etc\/sudoers\.d\/ghdeploytest-deploy/);
   assert.match(script, /docker-compose/);
   assert.match(script, /deploy\.sh/);
-  assert.match(script, /sudo -p '' sh -c/);
-  assert.doesNotMatch(script, /sudo -S/);
+  assert.match(script, /^set -e/);
+  assert.doesNotMatch(script, /\bsudo\s+-/);
   assert.doesNotMatch(script, /\/data(?:['\/]|\s)/);
   assert.doesNotMatch(script, /\/cache(?:['\/]|\s)/);
   assert.doesNotMatch(script, /rm -rf \/volume1\/docker\/ghdeploytest\s*$/m);

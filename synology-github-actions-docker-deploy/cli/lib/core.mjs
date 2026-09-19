@@ -98,8 +98,13 @@ function sshArgs(config, extra = []) {
 export const usesAdminKey = (config) => Boolean(config.nas.adminKey && fs.existsSync(expandHome(config.nas.adminKey)));
 
 // NAS에서 스크립트를 실행합니다. password를 주면 스크립트 첫 줄의 sudo 확인에 쓰입니다.
-export function remote(config, script, { password = null, interactive = false } = {}) {
-  const body = password === null ? script : `sudo -S -p '' -v 2>/dev/null || { echo ${BAD_PASSWORD_MARK}; exit 9; }\n${script}`;
+export function remote(config, script, { password = null, interactive = false, root = false } = {}) {
+  let body = script;
+  if (root) {
+    body = `sudo -S -p '' sh -c ${shellQuote(script)}`;
+  } else if (password !== null) {
+    body = `sudo -S -p '' -v 2>/dev/null || { echo ${BAD_PASSWORD_MARK}; exit 9; }\n${script}`;
+  }
   const args = [...sshArgs(config, interactive ? ['-t'] : []), adminTarget(config), body];
   const result = spawnSync('ssh', args, {
     input: password === null ? undefined : `${password}\n`,
