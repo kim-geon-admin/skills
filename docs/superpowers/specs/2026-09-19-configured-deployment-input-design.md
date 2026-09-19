@@ -7,6 +7,7 @@ Make `nas-deploy` ask for every deployment-specific value, show generic route ex
 ## Scope
 
 - Improve `init` prompts, validation, and final configuration summary.
+- Check whether the selected deployment account already exists on the NAS before key registration.
 - Show generic examples for reverse proxy and internal-only routes.
 - Make key, NAS-install, and Secrets screens use resolved values from the current configuration.
 - Document the configuration source and route meanings in the skill and README.
@@ -24,6 +25,14 @@ Make `nas-deploy` ask for every deployment-specific value, show generic route ex
 Existing values are offered as defaults on a later `init` run. A new configuration has no guessed NAS host, account, or NAS directory. Required values reject empty input and generic example text.
 
 `infra/synology/.env` remains application runtime configuration uploaded to the NAS. It must not contain the DSM password or SSH private-key contents. The private key remains on the PC at `keyPath`, and GitHub Secrets reads it directly from that path.
+
+## Deployment Account Selection
+
+`init` asks for the deployment account name but does not assume that the account exists. `prepare` connects to the NAS with the DSM administrator and checks the selected account before any public key is registered.
+
+- When the account exists, the CLI shows its username, administrator-group membership, SSH shell, home-directory access, and deployment-directory access. It asks whether to use that existing account; choosing no returns the user to `init` to choose a different account name.
+- When the account is absent, the CLI does not create it through unsupported Synology internals. It shows the DSM Control Panel path and the exact account name to create, then stops before `key` or `nas` can change that account.
+- Existing accounts, their other SSH keys, and their unrelated project access are never overwritten or removed by this choice.
 
 ## Route Copy
 
@@ -68,11 +77,12 @@ The NAS directory is always user input. Prompt copy may use examples such as `/v
 
 - Reject empty host, administrator account, deployment account, NAS directory, and key path.
 - Reject generic placeholders such as `나의 도메인`, `NAS 내부 IP`, and angle-bracket template text when used as real values.
+- Require an explicit choice to use an existing deployment account; block later setup steps when the selected account does not exist.
 - Preserve existing configuration values on re-run unless the user replaces them.
 - Do not add passwords or private-key material to project files, console summaries, or Git.
 
 ## Verification
 
-- Unit tests cover default-free configuration, rejection of placeholders, route copy, dynamically resolved summaries, and Secrets preview values.
+- Unit tests cover default-free configuration, rejection of placeholders, route copy, dynamically resolved summaries, Secrets preview values, and existing/missing deployment-account outcomes.
 - Existing CLI tests remain green.
 - README and `SKILL.md` use the same generic examples and explain why runtime `.env` excludes SSH credentials.
