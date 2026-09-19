@@ -1,5 +1,5 @@
 {
-  "name": "synology-docker-deploy",
+  "name": "synology-github-actions-docker-deploy",
   "version": "1.0.0",
   "description": "GitHub Actions to Synology NAS Docker deployment skill and CLI",
   "license": "MIT",
@@ -7,10 +7,10 @@
     "node": ">=20"
   },
   "bin": {
-    "nas-deploy": "synology-docker-deploy/cli/nas-deploy.mjs"
+    "nas-deploy": "synology-github-actions-docker-deploy/cli/nas-deploy.mjs"
   },
   "files": [
-    "synology-docker-deploy"
+    "synology-github-actions-docker-deploy"
   ],
   "repository": {
     "type": "git",

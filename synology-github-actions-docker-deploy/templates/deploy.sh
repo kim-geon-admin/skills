@@ -1,5 +1,5 @@
 #!/bin/bash
-# Synology NAS deploy script (template: synology-docker-deploy skill).
+# Synology NAS deploy script (template: synology-github-actions-docker-deploy skill).
 # Invoked as root by deploy-gate.sh through a single NOPASSWD sudo rule:
 #   $1    40-char commit SHA whose images the GitHub Actions workflow pushed to GHCR
 #   stdin registry user and token, one per line; used for this run only, never stored

@@ -1,5 +1,5 @@
 #!/bin/sh
-# SSH forced command for the GitHub Actions deploy key (template: synology-docker-deploy skill).
+# SSH forced command for the GitHub Actions deploy key (template: synology-github-actions-docker-deploy skill).
 # Runs as the deploy user. The only accepted request is "deploy <40-char commit SHA>";
 # anything else (shell, scp, sftp, port forwarding requests) is rejected.
 set -eu

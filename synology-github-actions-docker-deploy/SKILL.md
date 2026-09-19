@@ -1,5 +1,5 @@
 ---
-name: synology-docker-deploy
+name: synology-github-actions-docker-deploy
 description: GitHub Actions로 Docker 이미지를 빌드해 Synology NAS(DSM 7, Container Manager)에 SSH로 안전하게 자동 배포(CI/CD)하는 구성을 새로 만들거나, 기존 NAS 배포 워크플로를 보안 검토할 때 사용. 검증된 워크플로·배포 스크립트(pull→백업→교체→헬스체크→자동 롤백) 템플릿, 배포 전용 계정/SSH 강제 명령/sudo/known_hosts/Secrets 설정 절차, 실제로 겪은 시행착오(Synology ACL, DSM 80/443, CRLF, PowerShell 차이 등) 해결법 포함. "시놀로지 배포", "NAS CI/CD", "GitHub Actions로 NAS에 배포", "나스 도커 자동 배포" 요청 시 사용.
 ---
 
@@ -42,7 +42,7 @@ nas-deploy help
 ```
 
 CLI를 설치하지 않고 스킬 폴더를 직접 clone해서 쓰는 경우에는
-`node ~/.claude/skills/synology-docker-deploy/cli/nas-deploy.mjs help`로 실행할 수도 있다.
+`node ~/.claude/skills/synology-github-actions-docker-deploy/cli/nas-deploy.mjs help`로 실행할 수도 있다.
 
 처음 설치하는 NAS라면 `init` 다음에 **`prepare`** 를 먼저 돌려 DSM 준비를 끝내야 `key` 가 성공한다.
 

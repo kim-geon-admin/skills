@@ -7,7 +7,7 @@ Claude Code는 `~/.claude/skills/<스킬 이름>/SKILL.md`를 자동으로 읽�
 
 | 스킬 | 설명 |
 | --- | --- |
-| [synology-docker-deploy](synology-docker-deploy/SKILL.md) | GitHub Actions로 이미지를 빌드해 Synology NAS Docker에 안전하게 자동 배포(롤백 포함). 설정을 대신 해 주는 `nas-deploy` CLI 포함 |
+| [synology-github-actions-docker-deploy](synology-github-actions-docker-deploy/SKILL.md) | GitHub Actions로 이미지를 빌드해 Synology NAS Docker에 안전하게 자동 배포(롤백 포함). 설정을 대신 해 주는 `nas-deploy` CLI 포함 |
 
 ## 구조
 
@@ -94,7 +94,7 @@ temporary 모드는 Windows DPAPI로 암호화한 임시 파일을 세션 동안
 앱의 `data`·`cache`, GHCR 이미지는 보존하고, 이 프로젝트에 해당하는 키 줄·sudo 규칙·컨테이너·배포 파일만 제거합니다. 비밀번호 입력 방식은 `init`에서 선택한 정책을 따릅니다.
 
 설치 후에는 프로젝트 저장소 폴더에서 `nas-deploy init`부터 실행합니다. CLI는
-`synology-docker-deploy` 스킬 파일과 함께 설치되며, 별도 의존성이 필요하지 않습니다.
+`synology-github-actions-docker-deploy` 스킬 파일과 함께 설치되며, 별도 의존성이 필요하지 않습니다.
 
 위의 `git clone` 방식은 Claude Code가 스킬을 자동으로 읽게 할 때 사용하고, CLI만
 사용하려면 npm 설치 방식만 실행하면 됩니다. 이미 설치한 CLI를 최신 버전으로

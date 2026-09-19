@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // nas-deploy - GitHub Actions에서 Synology NAS로 배포하는 환경을 만들고 운영하는 도구.
-// synology-docker-deploy 스킬의 일부입니다. Node 20 이상, 추가 설치 없이 동작합니다.
+// synology-github-actions-docker-deploy 스킬의 일부입니다. Node 20 이상, 추가 설치 없이 동작합니다.
 // 모든 명령은 여러 번 실행해도 안전하며, 비밀번호는 기본적으로 저장하지 않습니다.
 import { createInterface } from 'node:readline/promises';
 import { UserError, loadConfig } from './lib/core.mjs';
