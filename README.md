@@ -79,14 +79,27 @@ nas-deploy help
 
 `nas-deploy secrets`는 프로젝트 설정의 `owner/project` 저장소를 자동 지정해 NAS 접속용 GitHub Actions Secret 5개를 직접 등록하고 결과를 확인합니다. 별도로 `gh secret set` 명령을 입력할 필요가 없습니다.
 
+`nas-deploy init`은 NAS 주소, SSH 포트, DSM 관리자 계정, 배포 계정, **NAS 배포 폴더**를
+사용자에게 직접 묻습니다. `/volume1/docker` 같은 경로를 자동으로 가정하지 않으며,
+예시는 `/volume2/apps/나의프로젝트`일 뿐 실제 NAS 폴더를 입력해야 합니다.
+
 `nas-deploy init`에서는 DSM 관리자 비밀번호 입력 방식을 선택합니다. `prompt`는 명령마다
 PowerShell에서 직접 입력하고, `temporary`는 `nas-deploy session` 실행 중 한 번만 입력합니다.
 temporary 모드는 Windows DPAPI로 암호화한 임시 파일을 세션 동안만 사용하며, 성공·실패와
 관계없이 세션이 끝나면 자동 삭제합니다.
 
+`nas-deploy prepare`는 선택한 배포 계정이 이미 있는지 먼저 확인합니다. 계정이 없으면
+DSM의 제어판 → 사용자 및 그룹에서 만들도록 안내하고, 사용자가 완료했다고 답한 뒤
+같은 NAS 점검을 다시 실행합니다. 이미 조건을 만족하는 계정이면 그 계정을 사용할지
+명시적으로 확인하며, 거부하면 `init`에서 다른 계정 이름을 입력할 수 있습니다.
+
+`.env`에는 앱이 필요한 설정만 넣습니다. DSM 관리자 비밀번호나 SSH 개인 키는 `.env`에
+저장하지 않습니다. 관리자 비밀번호는 선택한 입력 정책으로 세션 중에만 사용하고,
+SSH 개인 키는 사용자 PC의 프로젝트별 경로에서 읽어 GitHub Secret에 등록합니다.
+
 같은 `init` 단계에서 앱 접속 방식과 포트를 구분해 입력합니다. 역방향 프록시면
 `나의 도메인:포트번호 → 127.0.0.1:Synology Docker 연결 포트 → 실제 컨테이너 포트`,
-내부 전용이면 `127.0.0.1:3200 또는 Synology 내부 IP:3200 → 실제 컨테이너 포트`로
+내부 전용이면 `NAS 내부 IP:Synology Docker 연결 포트 → 실제 컨테이너 포트`로
 기록하고, 생성되는 `.env`의 `HTTP_BIND`에도 반영합니다.
 `127.0.0.1`은 NAS 자신 또는 NAS 역방향 프록시만 접근할 때 사용하고, 같은 네트워크의
 다른 기기에서 접근하려면 Synology 내부 IP를 사용합니다.

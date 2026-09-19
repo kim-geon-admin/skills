@@ -48,7 +48,7 @@ CLI를 설치하지 않고 스킬 폴더를 직접 clone해서 쓰는 경우에�
 
 | 명령 | 하는 일 |
 | --- | --- |
-| `prepare` | DSM에서 먼저 해야 할 일(계정 생성, 공유 폴더 권한, 홈 서비스, Container Manager)을 안내하고 NAS에서 실제로 됐는지 검사 |
+| `prepare` | DSM에서 먼저 해야 할 일(계정 생성, 공유 폴더 권한, 홈 서비스, Container Manager)을 안내하고 NAS에서 실제로 됐는지 검사. 배포 계정이 없으면 생성 후 같은 점검을 다시 실행하며, 기존 계정은 사용할지 확인 |
 | `init` | 질문에 답하면 워크플로·compose·배포 스크립트·.env·설정 파일 생성, 없으면 Dockerfile 초안까지 (액션 SHA도 최신으로 고정) |
 | `login` | (선택) 관리자 열쇠를 NAS에 등록해 이후 SSH 비밀번호 입력을 없앰 |
 | `key` | 배포 전용 열쇠 생성 → `authorized_keys`에 강제 명령으로 등록 → 호스트 키 저장·대조 → 접속 시험 |
@@ -117,17 +117,33 @@ CLI를 전역 설치했다면 별칭 없이 모든 프로젝트에서 `nas-deplo
 
 `init`의 접속 경로 질문은 반드시 구분해서 기록한다. 역방향 프록시는
 `나의 도메인:포트번호 → 127.0.0.1:Synology Docker 연결 포트 → 실제 컨테이너 포트`,
-내부 전용은 `127.0.0.1:3200 또는 Synology 내부 IP:3200 → 실제 컨테이너 포트`다.
+내부 전용은 `NAS 내부 IP:Synology Docker 연결 포트 → 실제 컨테이너 포트`다.
 `127.0.0.1`은 NAS 자신 또는 NAS 역방향 프록시만 접근할 때 사용하고, 같은 네트워크의
 다른 기기에서 접근하려면 Synology 내부 IP를 사용한다.
 이 값은 `network` 설정과 `.env`의 `HTTP_BIND`에 저장되며, Docker 연결 포트와 컨테이너
 포트를 같은 값으로 가정하지 않는다.
 
+`init`은 NAS 주소, SSH 포트, DSM 관리자 계정, 배포 계정, NAS 배포 폴더를 사용자에게
+직접 입력받는다. NAS 배포 폴더는 `/volume2/apps/나의프로젝트`처럼 실제 NAS 환경에
+맞춰 입력하며 `/volume1/docker/<이름>`을 기본값으로 넣지 않는다. 역방향 프록시의
+외부 URL·포트, Synology Docker 연결 포트, 실제 컨테이너 포트도 각각 따로 입력한다.
+
+`prepare`에서 선택한 배포 계정이 없으면 DSM의 제어판 → 사용자 및 그룹 → 사용자 생성
+절차를 안내한다. 사용자가 계정을 만든 뒤 재확인을 선택하면 동일한 원격 점검을 다시
+실행하고, 여전히 준비되지 않았으면 `key` 이후 단계로 넘어가지 않는다. 기존 계정이
+이미 조건을 만족하면 그 계정을 사용할지 명시적으로 묻고, 거부할 경우 `init`에서 다른
+계정 이름을 선택하도록 안내한다.
+
+`.env`는 앱 설정 파일이며 DSM 관리자 비밀번호와 SSH 개인 키를 넣지 않는다. DSM
+비밀번호는 `prompt` 또는 `temporary` 정책에 따라 세션 중에만 사용하고, 개인 키는
+프로젝트별 PC 경로에서 읽어 `NAS_SSH_PRIVATE_KEY` Secret으로 등록한다. `secrets` 화면은
+키와 known-hosts 파일의 내용 대신 로컬 파일 경로만 보여 준다.
+
 같은 NAS에 여러 프로젝트를 올릴 때 프로젝트마다 달라야 하는 값:
 
 | 항목 | 이유 |
 | --- | --- |
-| 프로젝트 이름 = NAS 폴더 `/volume1/docker/<이름>` = compose 프로젝트명 | 폴더·컨테이너 이름 충돌 방지 |
+| 프로젝트 이름 = 사용자가 입력한 NAS 배포 폴더 = compose 프로젝트명 | 폴더·컨테이너 이름 충돌 방지 |
 | NAS 내부 포트(`HTTP_BIND`)와 역방향 프록시 외부 포트 | 포트 충돌 방지 |
 | 배포 열쇠와 `authorized_keys` 줄 (`github-actions@<프로젝트>`) | 키 하나가 뚫려도 다른 프로젝트에 영향 없음 |
 | `/etc/sudoers.d/<프로젝트>-deploy` | 프로젝트별 배포 스크립트만 허용 |
@@ -152,7 +168,7 @@ CLI를 전역 설치했다면 별칭 없이 모든 프로젝트에서 `nas-deplo
    | `__GHCR_OWNER__` | GitHub 소유자(소문자) | `나의깃허브계정` |
    | `SERVICES` | 빌드할 compose 서비스들 (워크플로 matrix와 동일) | `(app worker)` |
    | `__DOCKERFILE__` | 서비스별 Dockerfile 경로 | `infra/docker/${{ matrix.service }}.Dockerfile` |
-   | `BACKUP_FILES` | 교체 전 복사할 호스트 파일 | `(/volume1/docker/나의프로젝트/data/app.sqlite)` |
+| `BACKUP_FILES` | 교체 전 복사할 호스트 파일 | `(/실제/NAS배포폴더/data/app.sqlite)` |
    | `__HOST_PORT__` | NAS loopback 포트 (역방향 프록시 대상) | `3100` |
 
 3. **템플릿 적용**: `templates/*`를 프로젝트의 `.github/workflows/deploy.yml`, `infra/synology/`, `.gitattributes`로
