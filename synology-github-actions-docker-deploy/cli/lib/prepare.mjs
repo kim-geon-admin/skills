@@ -43,10 +43,29 @@ function guide(config) {
   note('docker 가 막히면 배포 명령이 Permission denied 로 막힙니다.');
 }
 
-export async function prepareCommand(rl) {
-  const config = loadConfig();
+export function buildPrepareProbeScript(config) {
   const dir = nasDir(config);
   const user = config.nas.deployUser;
+  const parent = dir.split('/').slice(0, -1).join('/') || '/volume1/docker';
+  const home = `/var/services/homes/${user}`;
+  return [
+    `echo "USER=$(id ${user} >/dev/null 2>&1 && echo ok || echo missing)"`,
+    `echo "GROUP=$(id -nG ${user} 2>/dev/null | grep -qw administrators && echo ok || echo no)"`,
+    `echo "SHELL=$(getent passwd ${user} 2>/dev/null | awk -F: '{print $NF}')"`,
+    `echo "HOME=$([ -d ${home} ] && echo ok || echo missing)"`,
+    `echo "HOMEACCESS=$(sudo -u ${user} ls ${home} >/dev/null 2>&1 && echo ok || echo denied)"`,
+    `echo "DOCKERSHARE=$(sudo -u ${user} ls ${parent} >/dev/null 2>&1 && echo ok || echo denied)"`,
+    'if /usr/local/bin/docker-compose version >/dev/null 2>&1; then echo "COMPOSE=ok"; elif /usr/local/bin/docker compose version >/dev/null 2>&1; then echo "COMPOSE=ok"; else echo "COMPOSE=missing"; fi',
+    'echo "SUDOERSDIR=$(sudo grep -c includedir /etc/sudoers 2>/dev/null || echo 0)"',
+    'echo "DRI=$(ls /dev/dri >/dev/null 2>&1 && echo ok || echo none)"',
+    `echo "DISK=$(df -Pm ${parent} 2>/dev/null | awk 'NR==2{print $4}')"`
+  ].join('\n');
+}
+
+export async function prepareCommand(rl) {
+  const config = loadConfig();
+  const user = config.nas.deployUser;
+  const home = `/var/services/homes/${user}`;
   guide(config);
 
   if (!(await confirm(rl, '위 준비를 마쳤나요? 지금 NAS에 접속해 확인할까요?', true))) {
@@ -56,20 +75,7 @@ export async function prepareCommand(rl) {
   if (!usesAdminKey(config)) detail('"nas-deploy login" 을 해 두면 다음부터 SSH 비밀번호를 묻지 않습니다.');
   const password = await askNasPassword(rl, config, { reason: '계정과 폴더 권한을 확인하기 위해' });
 
-  const parent = dir.split('/').slice(0, -1).join('/') || '/volume1/docker';
-  const home = `/var/services/homes/${user}`;
-  const script = [
-    `echo "USER=$(id ${user} >/dev/null 2>&1 && echo ok || echo missing)"`,
-    `echo "GROUP=$(id -nG ${user} 2>/dev/null | grep -qw administrators && echo ok || echo no)"`,
-    `echo "SHELL=$(getent passwd ${user} 2>/dev/null | awk -F: '{print $NF}')"`,
-    `echo "HOME=$([ -d ${home} ] && echo ok || echo missing)"`,
-    `echo "HOMEACCESS=$(sudo -u ${user} ls ${home} >/dev/null 2>&1 && echo ok || echo denied)"`,
-    `echo "DOCKERSHARE=$(sudo -u ${user} ls ${parent} >/dev/null 2>&1 && echo ok || echo denied)"`,
-    'echo "COMPOSE=$(sudo docker compose version >/dev/null 2>&1 && echo ok || echo missing)"',
-    'echo "SUDOERSDIR=$(sudo grep -c includedir /etc/sudoers 2>/dev/null || echo 0)"',
-    'echo "DRI=$(ls /dev/dri >/dev/null 2>&1 && echo ok || echo none)"',
-    `echo "DISK=$(df -Pm ${parent} 2>/dev/null | awk 'NR==2{print $4}')"`
-  ].join('\n');
+  const script = buildPrepareProbeScript(config);
 
   heading('확인 결과');
   const probe = () => remote(config, script, { password, root: true });

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { deploymentAccountGuide, deploymentAccountState } from './prepare.mjs';
+import { buildPrepareProbeScript, deploymentAccountGuide, deploymentAccountState } from './prepare.mjs';
 
 const ready = {
   USER: 'ok',
@@ -27,4 +27,14 @@ test('shows the exact selected account and DSM creation path', () => {
   const guide = deploymentAccountGuide({ nas: { deployUser: 'release-bot' } });
   assert.match(guide, /제어판.*사용자 및 그룹/);
   assert.match(guide, /release-bot/);
+});
+
+test('checks Container Manager through its absolute Synology paths', () => {
+  const script = buildPrepareProbeScript({
+    nas: { deployUser: 'test-deploy', dir: '/volume1/docker/ghdeploytest' }
+  });
+
+  assert.match(script, /\/usr\/local\/bin\/docker-compose version/);
+  assert.match(script, /\/usr\/local\/bin\/docker compose version/);
+  assert.doesNotMatch(script, /sudo docker compose/);
 });
