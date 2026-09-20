@@ -4,25 +4,32 @@ import { askNasPassword } from './ask.mjs';
 import { loadConfig, nasDir, remote, usesAdminKey } from './core.mjs';
 import { badItem, bold, confirm, cyan, detail, dim, heading, note, okItem, panel, skipItem, warnItem } from './ui.mjs';
 
+export function deploymentShareName(config) {
+  const parts = nasDir(config).split('/').filter(Boolean);
+  return parts.length >= 2 ? parts[1] : '배포 경로가 속한 공유 폴더';
+}
+
 export function deploymentAccountState(values) {
   if (values.USER === 'missing') return 'missing';
   const shellReady = Boolean(values.SHELL) && !values.SHELL.includes('nologin');
   const ready = values.USER === 'ok' && values.GROUP === 'ok' && shellReady
-    && values.HOME === 'ok' && values.HOMEACCESS === 'ok' && values.DOCKERSHARE === 'ok';
+    && values.HOME === 'ok' && values.HOMEACCESS === 'ok' && values.DEPLOYSHARE === 'ok';
   return ready ? 'ready' : 'incomplete';
 }
 
 export function deploymentAccountGuide(config) {
+  const shareName = deploymentShareName(config);
   return [
     'DSM 화면에서 배포 전용 계정을 확인하거나 만들어 주세요.',
     `제어판 → 사용자 및 그룹 → 사용자 생성 → 이름 ${config.nas.deployUser}`,
     '그룹: administrators, 사용자 홈 서비스: 활성화',
-    '권한: homes 액세스 불가 해제, 배포 폴더가 포함된 공유 폴더는 읽기 전용 권한'
+    `권한: homes 액세스 불가 해제, 배포 경로가 속한 공유 폴더(${shareName})는 읽기 전용 권한`
   ].join('\n');
 }
 
 function guide(config) {
   const dir = nasDir(config);
+  const shareName = deploymentShareName(config);
   panel('prepare - NAS 준비 상태 확인', [
     `배포 계정: ${config.nas.deployUser}   ${dim(`설치 폴더 ${dir}`)}`,
     '',
@@ -36,11 +43,11 @@ function guide(config) {
   detail(`4) 제어판 → 사용자 및 그룹 → 생성 → 이름 ${config.nas.deployUser}`);
   detail('   · 비밀번호: 32자 이상 무작위 (평소 쓰지 않는 계정입니다)');
   detail('   · 그룹: administrators 체크 (DSM 7은 관리자만 SSH 로그인이 됩니다)');
-  detail('   · 권한 탭: "homes" 는 액세스 불가 체크 해제(빈칸), "docker" 는 읽기 전용, 나머지는 액세스 불가');
+  detail(`   · 권한 탭: "homes" 는 액세스 불가 체크 해제(빈칸), "${shareName}" 는 읽기 전용, 나머지는 액세스 불가`);
   detail('5) 제어판 → 보안 → 보호 → 자동 차단 활성화');
   detail('6) 공유기에서 SSH 포트를 NAS로 포워딩');
   note('공유 폴더 권한은 Synology 고유 규칙이라 파일 권한보다 우선합니다. homes 가 막히면 열쇠 로그인이 안 되고,');
-  note('docker 가 막히면 배포 명령이 Permission denied 로 막힙니다.');
+  note(`배포 경로가 속한 공유 폴더(${shareName})가 막히면 배포 명령이 Permission denied 로 막힙니다.`);
 }
 
 export function buildPrepareProbeScript(config) {
@@ -54,7 +61,7 @@ export function buildPrepareProbeScript(config) {
     `echo "SHELL=$(getent passwd ${user} 2>/dev/null | awk -F: '{print $NF}')"`,
     `echo "HOME=$([ -d ${home} ] && echo ok || echo missing)"`,
     `echo "HOMEACCESS=$(sudo -u ${user} ls ${home} >/dev/null 2>&1 && echo ok || echo denied)"`,
-    `echo "DOCKERSHARE=$(sudo -u ${user} ls ${parent} >/dev/null 2>&1 && echo ok || echo denied)"`,
+    `echo "DEPLOYSHARE=$(sudo -u ${user} ls ${parent} >/dev/null 2>&1 && echo ok || echo denied)"`,
     'if /usr/local/bin/docker-compose version >/dev/null 2>&1; then echo "COMPOSE=ok"; elif /usr/local/bin/docker compose version >/dev/null 2>&1; then echo "COMPOSE=ok"; else echo "COMPOSE=missing"; fi',
     'echo "SUDOERSDIR=$(sudo grep -c includedir /etc/sudoers 2>/dev/null || echo 0)"',
     'echo "DRI=$(ls /dev/dri >/dev/null 2>&1 && echo ok || echo none)"',
@@ -80,7 +87,7 @@ export async function prepareCommand(rl) {
   heading('확인 결과');
   const probe = () => remote(config, script, { password, root: true });
   const parseValues = (out) => Object.fromEntries(
-    ['USER', 'GROUP', 'SHELL', 'HOME', 'HOMEACCESS', 'DOCKERSHARE', 'COMPOSE', 'SUDOERSDIR', 'DRI', 'DISK']
+    ['USER', 'GROUP', 'SHELL', 'HOME', 'HOMEACCESS', 'DEPLOYSHARE', 'COMPOSE', 'SUDOERSDIR', 'DRI', 'DISK']
       .map((name) => [name, new RegExp(`${name}=(\\S*)`).exec(out)?.[1] ?? ''])
   );
   let values = parseValues(probe().out);
@@ -107,6 +114,7 @@ export async function prepareCommand(rl) {
     return;
   }
   const value = (name) => values[name] ?? '';
+  const shareName = deploymentShareName(config);
   const problems = [];
   const fail = (text, advice) => { badItem(text); if (advice) note(advice); problems.push(text); };
 
@@ -126,8 +134,8 @@ export async function prepareCommand(rl) {
   if (value('HOMEACCESS') === 'ok') okItem('배포 계정이 자기 홈 폴더에 접근할 수 있습니다');
   else fail('배포 계정이 자기 홈 폴더에 접근하지 못합니다', '계정 편집 → 권한 탭에서 "homes" 의 액세스 불가 체크를 해제하세요.');
 
-  if (value('DOCKERSHARE') === 'ok') okItem('배포 계정이 docker 폴더를 읽을 수 있습니다');
-  else fail('배포 계정이 docker 폴더를 읽지 못합니다', '계정 편집 → 권한 탭에서 "docker" 를 읽기 전용으로 바꿔 주세요.');
+  if (value('DEPLOYSHARE') === 'ok') okItem(`배포 계정이 배포 경로가 속한 공유 폴더(${shareName})를 읽을 수 있습니다`);
+  else fail(`배포 계정이 배포 경로가 속한 공유 폴더(${shareName})를 읽지 못합니다`, `계정 편집 → 권한 탭에서 "${shareName}" 를 읽기 전용으로 바꿔 주세요.`);
 
   if (value('COMPOSE') === 'ok') okItem('docker compose 사용 가능');
   else fail('docker compose 를 찾을 수 없습니다', '패키지 센터에서 Container Manager 설치와 실행 상태를 확인하세요.');

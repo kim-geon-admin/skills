@@ -157,7 +157,7 @@ Enter로 분리된 포트를 유지한다. DSM 역방향 프록시의 소스는 
 
 - 비밀번호 입력 방식은 `init`에서 고른다. `prompt`는 명령마다 직접 입력하고, Windows `temporary`는 DPAPI 암호화 임시 파일을 한 세션 동안만 사용한 뒤 자동 삭제한다.
 - 파일 전송은 scp 대신 같은 SSH 접속으로 보낸다(SFTP 설정과 무관, 접속 1회).
-- DSM 웹에서만 가능한 일(계정 생성, 공유 폴더 권한, 역방향 프록시, 공유기 포워딩)은 자동화하지 않는다. `prepare` 가 순서대로 안내하고, 계정·그룹·홈 접근·docker 폴더 접근·compose·sudoers.d 를 실제로 확인해 남은 것만 알려 준다.
+- DSM 웹에서만 가능한 일(계정 생성, 공유 폴더 권한, 역방향 프록시, 공유기 포워딩)은 자동화하지 않는다. `prepare` 가 순서대로 안내하고, 계정·그룹·홈 접근·배포 경로가 속한 공유 폴더 접근·compose·sudoers.d 를 실제로 확인해 남은 것만 알려 준다.
 - CLI가 없는 환경이거나 단계를 직접 보여 줘야 하면 아래 순서와 `references/nas-setup.md`를 쓴다.
 
 ## 진행 순서
@@ -216,7 +216,7 @@ Enter로 분리된 포트를 유지한다. DSM 역방향 프록시의 소스는 
 | 증상 | 원인 | 해결 |
 | --- | --- | --- |
 | 키 접속 시 **비밀번호를 물어봄** (`ssh -v`: Offering public key 후 거부) | gh-deploy의 `homes` 공유 폴더 권한이 **"액세스 불가"** → Synology ACL이 `chmod`보다 우선해 sshd가 `authorized_keys`를 못 읽음 | DSM → 사용자 → gh-deploy → 권한: `homes`의 액세스 불가 **해제**. 확인: `sudo -u gh-deploy cat ~gh-deploy/.ssh/authorized_keys` |
-| 로그인 후 `deploy-gate.sh: Permission denied` (exit 126) | `docker` 공유 폴더가 액세스 불가 | `docker`를 **읽기 전용**으로. 확인: `sudo -u gh-deploy ls -l …/bin/deploy-gate.sh` |
+| 로그인 후 `deploy-gate.sh: Permission denied` (exit 126) | 배포 경로가 속한 공유 폴더가 액세스 불가 | 해당 공유 폴더를 **읽기 전용**으로. 확인: `sudo -u gh-deploy ls -l …/bin/deploy-gate.sh` |
 | `synoacltool -del` → `Unknown error` | 지울 ACL이 없음 (원인은 위의 공유 폴더 권한) | 무시 |
 | `echo '…' \| sudo tee …` 붙여 넣으면 프롬프트가 `>`로 바뀜 | 긴 키 붙여 넣기 중 줄바꿈/따옴표 불일치 → 셸이 입력 대기 | `Ctrl+C`. PC에서 줄을 완성하고 NAS에서 `sudo tee 파일 > /dev/null` → 붙여 넣기 → Enter → `Ctrl+D` |
 | `authorized_keys`가 105바이트 (앞부분 누락) | 공개 키만 붙여 넣음 → 성공 시 **관리자 셸이 열림** | `restrict,command=` 포함 한 줄(약 168바이트)인지 `wc -c`로 확인 |
@@ -238,5 +238,5 @@ NAS 도메인, SSH 포트, DSM 관리자 계정, NAS 이름, GitHub 계정, PC �
 이미 적용된 프로젝트(저장소·NAS 폴더·포트).
 
 - 검증 환경: DSM 7 (OpenSSH 8.2, sshd `/bin/sshd`), Container Manager, Windows 10 + Git Bash + Docker Desktop + `gh` CLI
-- 배포 계정 `gh-deploy` (administrators, 공유 폴더: `docker` 읽기 전용 / `homes` 기본 / 나머지 액세스 불가)
+- 배포 계정 `gh-deploy` (administrators, 배포 경로가 속한 공유 폴더 읽기 전용 / `homes` 기본 / 나머지 액세스 불가)
 - 같은 NAS에 여러 프로젝트를 올릴 때는 NAS 폴더·포트·compose 프로젝트 이름이 겹치지 않게 한다

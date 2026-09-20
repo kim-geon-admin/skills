@@ -82,9 +82,11 @@ DSM 관리자 비밀번호 입력 → 프롬프트가 `나의관리자계정@나
 **DSM 웹 | 화면 조작** 제어판 → 사용자 및 그룹 → 생성 → 이름 `gh-deploy`
 - 비밀번호: 32자 이상 무작위(비밀번호 관리자에 보관). 로그인에 쓰지 않음.
 - 그룹: `administrators` — DSM 7은 관리자만 SSH 로그인 가능. 키는 강제 명령으로 묶여 셸을 못 얻는다.
-- 공유 폴더 권한: **`docker` = 읽기 전용, `homes` = "액세스 불가" 체크 해제(빈칸), 나머지 = 액세스 불가.**
+- 공유 폴더 권한: **배포 경로가 속한 공유 폴더 = 읽기 전용, `homes` = "액세스 불가" 체크 해제(빈칸), 나머지 = 액세스 불가.**
+  예를 들어 배포 경로가 `/volume1/docker/나의프로젝트`이면 `docker`가 해당 공유 폴더이고,
+  `/volume2/apps/나의프로젝트`이면 `apps`가 해당 공유 폴더다.
   Synology ACL은 `chmod`보다 우선한다. `homes`가 막히면 키 파일을 못 읽어 비밀번호를 묻고,
-  `docker`가 막히면 `deploy-gate.sh`가 Permission denied.
+  배포 경로가 속한 공유 폴더가 막히면 `deploy-gate.sh`가 Permission denied.
 
 계정이 이미 있으면(다른 프로젝트와 공유) 건너뛴다. 키는 **프로젝트별로 따로** 만들고 `authorized_keys`에
 프로젝트마다 한 줄씩 추가한다(3단계에서 `tee` 대신 `tee -a`로 추가).
@@ -249,7 +251,7 @@ deploy-gate: rejected request
 | 결과 | 원인·조치 |
 | --- | --- |
 | 비밀번호 요구 / `Permission denied (publickey,password)` | **PC · Git Bash** `ssh -v $K gh-deploy@나의NAS도메인 whoami`로 `Offering public key` 확인 → 제시했는데 거부면 **NAS · SSH 창** `sudo -u gh-deploy cat /var/services/homes/gh-deploy/.ssh/authorized_keys` → Permission denied면 1단계 `homes` 권한 |
-| `deploy-gate.sh: Permission denied` (exit 126) | 1단계 `docker` 공유 폴더를 읽기 전용으로 |
+| `deploy-gate.sh: Permission denied` (exit 126) | 1단계 배포 경로가 속한 공유 폴더를 읽기 전용으로 |
 | `deploy-gate.sh: No such file or directory` | 5단계 경로 |
 | `sudo: a password is required` | 4단계 (DSM 업데이트로 초기화됐을 수도) |
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPrepareProbeScript, deploymentAccountGuide, deploymentAccountState } from './prepare.mjs';
+import { buildPrepareProbeScript, deploymentAccountGuide, deploymentAccountState, deploymentShareName } from './prepare.mjs';
 
 const ready = {
   USER: 'ok',
@@ -8,7 +8,7 @@ const ready = {
   SHELL: '/bin/sh',
   HOME: 'ok',
   HOMEACCESS: 'ok',
-  DOCKERSHARE: 'ok'
+  DEPLOYSHARE: 'ok'
 };
 
 test('classifies an existing deployment account with all required access as ready', () => {
@@ -27,6 +27,12 @@ test('shows the exact selected account and DSM creation path', () => {
   const guide = deploymentAccountGuide({ nas: { deployUser: 'release-bot' } });
   assert.match(guide, /제어판.*사용자 및 그룹/);
   assert.match(guide, /release-bot/);
+});
+
+test('names the shared folder containing the configured deployment path', () => {
+  const config = { nas: { deployUser: 'release-bot', dir: '/volume2/apps/ghdeploytest' } };
+  assert.equal(deploymentShareName(config), 'apps');
+  assert.match(deploymentAccountGuide(config), /배포 경로가 속한 공유 폴더\(apps\).*읽기 전용/);
 });
 
 test('checks Container Manager through its absolute Synology paths', () => {
