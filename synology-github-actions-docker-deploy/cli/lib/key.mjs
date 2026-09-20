@@ -88,7 +88,7 @@ export async function keyCommand(rl) {
     `if sudo -u ${config.nas.deployUser} cat ${home}/.ssh/authorized_keys >/dev/null 2>&1; then echo READ=ok; else echo READ=denied; fi`,
     `echo "HOSTKEY=$(cut -d' ' -f1,2 /etc/ssh/ssh_host_ed25519_key.pub)"`
   ].join('\n');
-  const { out } = remote(config, script, { password });
+  const { out } = remote(config, script, { password, root: true });
 
   if (/READ=ok/.test(out)) okItem('배포 계정이 자기 열쇠 파일을 읽을 수 있습니다');
   else {

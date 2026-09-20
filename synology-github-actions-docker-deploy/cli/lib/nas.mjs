@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import { askNasPassword } from './ask.mjs';
 import {
-  COMPOSE_PATH, DEPLOY_SCRIPT_PATH, ENV_PATH, GATE_SCRIPT_PATH, INSTALL_FAILED_MARK, UserError,
+  COMPOSE_PATH, DEPLOY_SCRIPT_PATH, ENV_PATH, GATE_SCRIPT_PATH, UserError,
   filePayload, loadConfig, nasDir, readIfExists, remote, remoteStageFor, shellQuote, usesAdminKey
 } from './core.mjs';
 import { badItem, bold, confirm, cyan, detail, dim, heading, note, okItem, panel, skipItem, warnItem } from './ui.mjs';
@@ -44,7 +44,7 @@ export function buildInstallScript(config, files, envText) {
     filePayload(files, stage),
     `trap 'rm -rf ${stage}' EXIT`,
     `sed -i 's/\\r$//' ${stage}/deploy.sh ${stage}/deploy-gate.sh`,
-    `sudo -S -p '' sh -c ${shellQuote(privileged)} || { echo ${INSTALL_FAILED_MARK}; exit 10; }`
+    privileged
   ].join('\n');
 }
 
@@ -79,7 +79,7 @@ export async function nasCommand(rl) {
   if (envText !== null) files['env-file'] = envText;
 
   heading('설치 중');
-  const { out } = remote(config, buildInstallScript(config, files, envText), { password });
+  const { out } = remote(config, buildInstallScript(config, files, envText), { password, root: true });
   const value = (name) => new RegExp(`${name}=(\\S+)`).exec(out)?.[1];
 
   if (Number(value('SUDO') ?? 0) > 0) okItem('배포 계정이 배포 스크립트를 관리자 권한으로 실행할 수 있습니다');

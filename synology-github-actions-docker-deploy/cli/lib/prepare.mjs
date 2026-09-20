@@ -72,7 +72,7 @@ export async function prepareCommand(rl) {
   ].join('\n');
 
   heading('확인 결과');
-  const probe = () => remote(config, script, { password });
+  const probe = () => remote(config, script, { password, root: true });
   const parseValues = (out) => Object.fromEntries(
     ['USER', 'GROUP', 'SHELL', 'HOME', 'HOMEACCESS', 'DOCKERSHARE', 'COMPOSE', 'SUDOERSDIR', 'DRI', 'DISK']
       .map((name) => [name, new RegExp(`${name}=(\\S*)`).exec(out)?.[1] ?? ''])

@@ -2,8 +2,8 @@
 import fs from 'node:fs';
 import { askNasPassword } from './ask.mjs';
 import {
-  ENV_PATH, INSTALL_FAILED_MARK, UserError, capture, filePayload, loadConfig, nasDir, readIfExists, remote,
-  remoteStageFor, shellQuote, has
+  ENV_PATH, UserError, capture, filePayload, loadConfig, nasDir, readIfExists, remote,
+  remoteStageFor, has
 } from './core.mjs';
 import { badItem, bold, confirm, cyan, detail, dim, heading, note, okItem, panel, skipItem, warnItem } from './ui.mjs';
 
@@ -27,7 +27,7 @@ export function buildEnvInstallScript(config, envText) {
   return [
     filePayload({ 'env-file': envText }, stage),
     `trap 'rm -rf ${stage}' EXIT`,
-    `sudo -S -p '' sh -c ${shellQuote(privileged)} || { echo ${INSTALL_FAILED_MARK}; exit 10; }`
+    privileged
   ].join('\n');
 }
 
@@ -60,7 +60,7 @@ export async function envCommand(rl) {
   const script = buildEnvInstallScript(config, envText);
 
   heading('반영 중');
-  const { out } = remote(config, script, { password });
+  const { out } = remote(config, script, { password, root: true });
   const value = (name) => new RegExp(`${name}=(\\S+)`).exec(out)?.[1];
   if (value('MODE') === '600') okItem('NAS에 저장했습니다', `${dir}/.env`);
   else warnItem('저장은 됐지만 권한을 확인해 주세요', `현재 ${value('MODE')}`);

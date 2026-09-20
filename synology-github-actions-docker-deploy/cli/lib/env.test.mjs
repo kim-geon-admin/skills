@@ -11,11 +11,12 @@ const config = {
   }
 };
 
-test('uploads env through one password-fed root shell', () => {
+test('builds an env payload for one password-fed root shell', () => {
   const script = buildEnvInstallScript(config, 'DATA_DIR=/volume1/docker/ghdeploytest/data\n');
 
   assert.match(script, /\/var\/services\/homes\/nayaguny\/.nas-deploy-upload\/env-file/);
-  assert.match(script, /sudo -S -p '' sh -c/);
+  assert.doesNotMatch(script, /sudo -S -p '' sh -c/);
+  assert.match(script, /install -o root -g root -m 600/);
   assert.doesNotMatch(script, /sudo mkdir|sudo chmod|sudo tee/);
 });
 

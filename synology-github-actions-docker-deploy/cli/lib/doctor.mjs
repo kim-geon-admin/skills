@@ -125,7 +125,7 @@ export async function doctorCommand(rl, options = {}) {
     if (!usesAdminKey(config)) detail('"nas-deploy login" 을 해 두면 다음부터 SSH 비밀번호를 묻지 않습니다.');
     const password = await askNasPassword(rl, config, { reason: 'NAS 안의 파일과 권한을 확인하기 위해' });
     const script = buildNasDoctorScript(config);
-    const { out } = remote(config, script, { password });
+    const { out } = remote(config, script, { password, root: true });
     const value = (name) => name === 'AKREAD'
       ? (shellMessage.includes('rejected request') ? 'ok' : 'denied')
       : new RegExp(`${name}=(\\S+)`).exec(out)?.[1];

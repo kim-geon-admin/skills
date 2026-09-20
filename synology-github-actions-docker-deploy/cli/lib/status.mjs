@@ -45,7 +45,7 @@ export async function statusCommand(rl, options = {}) {
     `sudo sh -c 'ls -1t ${dir}/state/logs/*.log 2>/dev/null | head -n 1'`,
     `sudo sh -c 'tail -n 6 $(ls -1t ${dir}/state/logs/*.log 2>/dev/null | head -n 1) 2>/dev/null' || true`
   ].join('\n');
-  const { out } = remote(config, script, { password });
+  const { out } = remote(config, script, { password, root: true });
   const value = (name) => new RegExp(`${name}=(\\S+)`).exec(out)?.[1];
 
   const current = value('CURRENT');
