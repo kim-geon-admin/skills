@@ -30,7 +30,7 @@ export function buildInstallScript(config, files, envText) {
           `sed 's/\\r$//; s/\\x1b\\[20[01]~//g' ${stage}/env-file > ${stage}/env-file.cleaned`,
           `install -o root -g root -m 600 ${stage}/env-file.cleaned ${dir}/.env`
         ]
-      : []),
+      : [`if [ ! -e ${dir}/.env ]; then install -o root -g root -m 600 /dev/null ${dir}/.env; fi`]),
     `echo ${shellQuote(`${config.nas.deployUser} ALL=(root) NOPASSWD: ${dir}/bin/deploy.sh`)} > /etc/sudoers.d/${config.project}-deploy`,
     `chmod 440 /etc/sudoers.d/${config.project}-deploy`,
     `echo "SUDO=$(sudo -l -U ${config.nas.deployUser} 2>/dev/null | grep -c ${shellQuote(`${dir}/bin/deploy.sh`)})"`,
