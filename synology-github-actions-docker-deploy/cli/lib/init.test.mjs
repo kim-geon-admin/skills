@@ -1,6 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildEnv, configurationSummary, connectionRoute, routeExamples, validateDeploymentConfig, withDefaults } from './init.mjs';
+import { buildEnv, configurationSummary, connectionRoute, normalizePublicEndpoint, routeExamples, validateDeploymentConfig, withDefaults } from './init.mjs';
+
+test('accepts a port in the external URL without duplicating it in the route', () => {
+  assert.deepEqual(normalizePublicEndpoint('https://nayaguny.synology.me:1001', 443), {
+    publicUrl: 'https://nayaguny.synology.me',
+    publicPort: 1001
+  });
+
+  const config = withDefaults({
+    project: 'demo',
+    owner: 'owner',
+    network: { mode: 'reverse-proxy', publicUrl: 'https://nayaguny.synology.me:1001' }
+  });
+  assert.equal(config.network.publicPort, 1001);
+  assert.doesNotMatch(connectionRoute(config), /1001:443/);
+});
 
 test('init persists the selected temporary password mode and preserves admin key', () => {
   const config = withDefaults({

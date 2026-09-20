@@ -108,6 +108,17 @@ export function normalizeAccessMode(value) {
   return value === 'internal' ? 'internal' : 'reverse-proxy';
 }
 
+export function normalizePublicEndpoint(rawUrl, fallbackPort = 443) {
+  const raw = String(rawUrl ?? '').trim();
+  if (!raw) return { publicUrl: '', publicPort: Number(fallbackPort) };
+  const parsed = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`);
+  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('외부 URL은 http 또는 https여야 합니다.');
+  if (parsed.pathname !== '/' || parsed.search || parsed.hash) throw new Error('외부 URL에는 호스트와 포트만 입력하세요. 경로는 지원하지 않습니다.');
+  const hostname = parsed.hostname.includes(':') ? `[${parsed.hostname}]` : parsed.hostname;
+  const publicPort = parsed.port ? Number(parsed.port) : Number(fallbackPort);
+  return { publicUrl: `${parsed.protocol}//${hostname}`, publicPort };
+}
+
 export function connectionRoute(config) {
   const mode = normalizeAccessMode(config.network?.mode);
   const bindHost = config.network?.bindHost ?? (mode === 'reverse-proxy' ? '127.0.0.1' : '(127.0.0.1 또는 Synology 내부 IP)');
@@ -225,8 +236,10 @@ async function askConfig(rl, previous) {
   let publicPort = 443;
   let bindHost = '';
   if (mode === 'reverse-proxy') {
-    publicUrl = await ask(rl, '외부 URL (예: https://나의도메인)', previous?.network?.publicUrl ?? '');
-    publicPort = Number(await ask(rl, '외부 포트 (예: 1001)', String(previous?.network?.publicPort ?? 443)));
+    const publicUrlInput = await ask(rl, '외부 URL/호스트 (예: https://nayaguny.synology.me:1001)', previous?.network?.publicUrl ?? '');
+    const endpoint = normalizePublicEndpoint(publicUrlInput, previous?.network?.publicPort ?? 443);
+    publicUrl = endpoint.publicUrl;
+    publicPort = Number(await ask(rl, '외부 포트 (URL에 포트가 있으면 Enter로 유지)', String(endpoint.publicPort)));
     bindHost = '127.0.0.1';
     detail('역방향 프록시는 외부 URL을 Synology 역방향 프록시에서 아래 Docker 연결 포트로 연결하세요.');
   } else {
@@ -302,6 +315,7 @@ export function withDefaults(input) {
   const typeMeta = PROJECT_TYPES[projectType];
   const networkMode = normalizeAccessMode(input.network?.mode);
   const networkBindHost = input.network?.bindHost ?? (networkMode === 'reverse-proxy' ? '127.0.0.1' : '');
+  const endpoint = normalizePublicEndpoint(input.network?.publicUrl ?? '', input.network?.publicPort ?? 443);
   return {
     project,
     owner: (input.owner ?? '').toLowerCase(),
@@ -312,8 +326,8 @@ export function withDefaults(input) {
     hostPort: Number(input.hostPort ?? 3100),
     network: {
       mode: networkMode,
-      publicUrl: networkMode === 'internal' ? '' : (input.network?.publicUrl ?? ''),
-      publicPort: Number(input.network?.publicPort ?? 443),
+      publicUrl: networkMode === 'internal' ? '' : endpoint.publicUrl,
+      publicPort: Number(endpoint.publicPort),
       bindHost: networkBindHost
     },
     healthCheck: ['node', 'wget', 'curl', 'none'].includes(input.healthCheck) ? input.healthCheck : (typeMeta?.healthCheck ?? 'none'),
