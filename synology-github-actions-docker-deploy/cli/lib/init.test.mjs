@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { buildEnv, configurationSummary, connectionRoute, normalizePublicEndpoint, routeExamples, validateDeploymentConfig, withDefaults } from './init.mjs';
+import { buildEnv, configurationSummary, connectionRoute, confirmStoredConfig, normalizePublicEndpoint, routeExamples, validateDeploymentConfig, withDefaults } from './init.mjs';
 
 test('accepts a port in the external URL without duplicating it in the route', () => {
   assert.deepEqual(normalizePublicEndpoint('https://example.synology.me:1001', 443), {
@@ -113,4 +113,21 @@ test('does not embed a project-specific NAS endpoint in init prompts', () => {
   const source = fs.readFileSync(new URL('./init.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /nayaguny\.synology\.me/);
   assert.doesNotMatch(source, /2233/);
+});
+
+test('asks whether to use an existing config before continuing', async () => {
+  const input = {
+    project: 'demo',
+    owner: 'owner',
+    keyPath: '~/.ssh/demo_deploy',
+    nas: { host: 'nas.example.test', port: 22, adminUser: 'admin', deployUser: 'gh-deploy', dir: '/volume2/apps/demo' }
+  };
+
+  const accept = { question: async () => 'y' };
+  const selected = await confirmStoredConfig(accept, input);
+  assert.equal(selected.nas.host, 'nas.example.test');
+  assert.equal(selected.nas.port, 22);
+
+  const reject = { question: async () => 'n' };
+  assert.equal(await confirmStoredConfig(reject, input), null);
 });

@@ -171,6 +171,24 @@ export function configurationSummary(config) {
   ].join('\n');
 }
 
+export function existingConfigSummary(config) {
+  const normalized = withDefaults(config);
+  return [
+    `프로젝트: ${normalized.project}`,
+    `GitHub 계정: ${normalized.owner || '(미입력)'}`,
+    `NAS: ${normalized.nas.host || '(미입력)'}:${normalized.nas.port || '(미입력)'}`,
+    `배포 계정: ${normalized.nas.deployUser || '(미입력)'}`,
+    `배포 폴더: ${normalized.nas.dir || '(미입력)'}`,
+    `접속 방식: ${normalized.network.mode}`
+  ].join('\n');
+}
+
+export async function confirmStoredConfig(rl, previous) {
+  const config = withDefaults(previous);
+  panel('기존 deploy.config.json 확인', existingConfigSummary(config).split('\n'));
+  return (await confirm(rl, '이 설정으로 진행할까요?', true)) ? config : null;
+}
+
 export function buildEnv(config) {
   const bindHost = config.network?.bindHost ?? '127.0.0.1';
   return [
@@ -367,6 +385,19 @@ export async function initCommand(rl, options = {}) {
     // 질문 없이 만들기: 미리 적어 둔 설정 파일을 그대로 씁니다.
     config = withDefaults(JSON.parse(fs.readFileSync(options.from, 'utf8')));
     okItem('설정 파일을 읽었습니다', options.from);
+  } else if (previous) {
+    const stored = await confirmStoredConfig(rl, previous);
+    if (stored) {
+      try {
+        config = validateDeploymentConfig(stored);
+      } catch (error) {
+        warnItem(`기존 설정이 완전하지 않아 다시 입력받습니다: ${error.message}`);
+        config = await askConfig(rl, previous);
+      }
+    } else {
+      detail('기존 설정을 사용하지 않습니다. 설정값을 다시 입력하세요.');
+      config = await askConfig(rl, previous);
+    }
   } else {
     config = await askConfig(rl, previous);
   }
