@@ -107,6 +107,10 @@ Spring/Tomcat, `requirements.txt` → Python, `go.mod` → Go, `index.html` → 
 - **레지스트리는 GHCR 고정.** Docker Hub 등 다른 레지스트리는 워크플로와 배포 스크립트를 손봐야 한다.
 - **빌드는 GitHub 러너에서 한다.** 유료 러너 없이 큰 이미지를 만들면 시간이 오래 걸린다(캐시는 켜져 있음).
 
+### 설정 질문 동작
+
+`deploy.config.json`이 있어도 `init`은 매번 설정 항목을 질문합니다. 저장된 값은 각 질문의 기본값으로 참고하며, Enter를 누르면 기존 값을 유지합니다.
+
 ### 여러 프로젝트에서 쓰기
 
 CLI는 특정 프로젝트에 묶이지 않는다. **실행한 폴더의 설정**(`infra/synology/deploy.config.json`)을 읽으므로,
