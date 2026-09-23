@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPrepareProbeScript, deploymentAccountGuide, deploymentAccountState, deploymentShareName } from './prepare.mjs';
+import {
+  buildPrepareProbeScript,
+  deploymentAccountGuide,
+  deploymentAccountState,
+  deploymentShareName,
+  replaceDeploymentAccount,
+  validateDeploymentUserName
+} from './prepare.mjs';
 
 const ready = {
   USER: 'ok',
@@ -43,4 +50,38 @@ test('checks Container Manager through its absolute Synology paths', () => {
   assert.match(script, /\/usr\/local\/bin\/docker-compose version/);
   assert.match(script, /\/usr\/local\/bin\/docker compose version/);
   assert.doesNotMatch(script, /sudo docker compose/);
+});
+
+test('accepts a safe new deployment account name', () => {
+  assert.equal(validateDeploymentUserName('release-bot'), 'release-bot');
+  assert.equal(validateDeploymentUserName('deploy_2'), 'deploy_2');
+});
+
+test('rejects unsafe or privileged new deployment account names', () => {
+  assert.throws(() => validateDeploymentUserName(''), /계정 이름/);
+  assert.throws(() => validateDeploymentUserName('release bot'), /계정 이름/);
+  assert.throws(() => validateDeploymentUserName('root'), /사용할 수 없습니다/);
+});
+
+test('shows account creation and permission registration for the selected name', () => {
+  const guide = deploymentAccountGuide({
+    nas: { deployUser: 'release-bot', dir: '/volume1/docker/ghdeploytest' }
+  });
+  assert.match(guide, /release-bot/);
+  assert.match(guide, /administrators/);
+  assert.match(guide, /homes/);
+  assert.match(guide, /읽기 전용/);
+});
+
+test('replaces only the deployment account in the saved configuration', () => {
+  const config = {
+    project: 'demo',
+    nas: { deployUser: 'gh-deploy', host: 'nas.example.test', dir: '/volume1/docker/demo' },
+    keyPath: '~/.ssh/demo_deploy'
+  };
+  const next = replaceDeploymentAccount(config, 'release-bot');
+  assert.equal(next.nas.deployUser, 'release-bot');
+  assert.equal(next.nas.host, config.nas.host);
+  assert.equal(next.keyPath, config.keyPath);
+  assert.equal(config.nas.deployUser, 'gh-deploy');
 });

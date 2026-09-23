@@ -1,8 +1,8 @@
 // prepare - DSM 웹에서 먼저 해 두어야 하는 준비를 안내하고, 실제로 됐는지 확인합니다.
 // 계정 만들기나 공유 폴더 권한은 DSM 화면에서만 할 수 있어서 CLI가 대신하지 못합니다.
 import { askNasPassword } from './ask.mjs';
-import { loadConfig, nasDir, remote, usesAdminKey } from './core.mjs';
-import { badItem, bold, confirm, cyan, detail, dim, heading, note, okItem, panel, skipItem, warnItem } from './ui.mjs';
+import { loadConfig, nasDir, remote, saveConfig, usesAdminKey } from './core.mjs';
+import { ask, badItem, bold, confirm, cyan, detail, dim, heading, note, okItem, panel, skipItem, warnItem } from './ui.mjs';
 
 export function deploymentShareName(config) {
   const parts = nasDir(config).split('/').filter(Boolean);
@@ -17,11 +17,29 @@ export function deploymentAccountState(values) {
   return ready ? 'ready' : 'incomplete';
 }
 
-export function deploymentAccountGuide(config) {
+export function validateDeploymentUserName(value) {
+  const user = String(value ?? '').trim();
+  if (!/^[a-z_][a-z0-9_-]{0,31}$/.test(user)) {
+    throw new Error('계정 이름은 영문 소문자·숫자·밑줄·하이픈으로 1~32자여야 합니다.');
+  }
+  if (['root', 'admin', 'administrator', 'nobody'].includes(user)) {
+    throw new Error(`시스템 계정 ${user}은(는) 배포 계정으로 사용할 수 없습니다.`);
+  }
+  return user;
+}
+
+export function replaceDeploymentAccount(config, deployUser) {
+  return {
+    ...config,
+    nas: { ...config.nas, deployUser: validateDeploymentUserName(deployUser) }
+  };
+}
+
+export function deploymentAccountGuide(config, accountName = config.nas.deployUser) {
   const shareName = deploymentShareName(config);
   return [
     'DSM 화면에서 배포 전용 계정을 확인하거나 만들어 주세요.',
-    `제어판 → 사용자 및 그룹 → 사용자 생성 → 이름 ${config.nas.deployUser}`,
+    `제어판 → 사용자 및 그룹 → 사용자 생성 → 이름 ${accountName}`,
     '그룹: administrators, 사용자 홈 서비스: 활성화',
     `권한: homes 액세스 불가 해제, 배포 경로가 속한 공유 폴더(${shareName})는 읽기 전용 권한`
   ].join('\n');
@@ -70,9 +88,9 @@ export function buildPrepareProbeScript(config) {
 }
 
 export async function prepareCommand(rl) {
-  const config = loadConfig();
-  const user = config.nas.deployUser;
-  const home = `/var/services/homes/${user}`;
+  let config = loadConfig();
+  let user = config.nas.deployUser;
+  let home = `/var/services/homes/${user}`;
   guide(config);
 
   if (!(await confirm(rl, '위 준비를 마쳤나요? 지금 NAS에 접속해 확인할까요?', true))) {
@@ -82,15 +100,13 @@ export async function prepareCommand(rl) {
   if (!usesAdminKey(config)) detail('"nas-deploy login" 을 해 두면 다음부터 SSH 비밀번호를 묻지 않습니다.');
   const password = await askNasPassword(rl, config, { reason: '계정과 폴더 권한을 확인하기 위해' });
 
-  const script = buildPrepareProbeScript(config);
-
   heading('확인 결과');
-  const probe = () => remote(config, script, { password, root: true });
+  const probe = (probeConfig) => remote(probeConfig, buildPrepareProbeScript(probeConfig), { password, root: true });
   const parseValues = (out) => Object.fromEntries(
     ['USER', 'GROUP', 'SHELL', 'HOME', 'HOMEACCESS', 'DEPLOYSHARE', 'COMPOSE', 'SUDOERSDIR', 'DRI', 'DISK']
       .map((name) => [name, new RegExp(`${name}=(\\S*)`).exec(out)?.[1] ?? ''])
   );
-  let values = parseValues(probe().out);
+  let values = parseValues(probe(config).out);
   let accountState = deploymentAccountState(values);
   if (accountState === 'missing') {
     badItem(`배포 계정 ${user} 이(가) 없습니다`);
@@ -99,7 +115,7 @@ export async function prepareCommand(rl) {
       note('계정 생성 후 다시 "nas-deploy prepare" 를 실행해 주세요.');
       return;
     }
-    values = parseValues(probe().out);
+    values = parseValues(probe(config).out);
     accountState = deploymentAccountState(values);
     if (accountState !== 'ready') {
       panel('배포 계정 재확인 실패', [
@@ -110,8 +126,34 @@ export async function prepareCommand(rl) {
     }
   }
   if (accountState === 'ready' && !(await confirm(rl, `기존 배포 계정 ${user}를 사용하시겠습니까?`, true))) {
-    note(`다른 계정을 사용하려면 "nas-deploy init" 에서 배포 전용 계정 이름을 바꾼 뒤 다시 실행해 주세요.`);
-    return;
+    if (!(await confirm(rl, '기존 계정 대신 신규 배포 계정을 생성하시겠습니까?', true))) {
+      note('기존 계정 사용을 취소했습니다. 계정 선택 후 다시 실행해 주세요.');
+      return;
+    }
+    const newUser = validateDeploymentUserName(await ask(rl, '신규 배포 계정 ID', 'gh-deploy-new'));
+    if (newUser === user) {
+      note('기존 계정과 다른 신규 계정 ID를 입력해 주세요.');
+      return;
+    }
+    config = replaceDeploymentAccount(config, newUser);
+    user = config.nas.deployUser;
+    home = `/var/services/homes/${user}`;
+    panel('신규 배포 계정 등록', deploymentAccountGuide(config).split('\n'));
+    if (!(await confirm(rl, `DSM에서 ${user} 계정을 생성하고 권한을 등록한 뒤 다시 검사할까요?`, true))) {
+      note(`DSM에서 ${user} 계정과 권한을 준비한 뒤 다시 "nas-deploy prepare" 를 실행해 주세요.`);
+      return;
+    }
+    values = parseValues(probe(config).out);
+    accountState = deploymentAccountState(values);
+    if (accountState !== 'ready') {
+      panel('신규 배포 계정 재확인 실패', [
+        `${user} 계정이 아직 배포에 필요한 상태가 아닙니다.`,
+        'DSM에서 administrators 그룹, homes 접근, 배포 공유 폴더 읽기 권한을 확인한 뒤 다시 실행해 주세요.'
+      ]);
+      return;
+    }
+    saveConfig(config);
+    okItem(`신규 배포 계정 ${user}를 설정에 저장했습니다`);
   }
   const value = (name) => values[name] ?? '';
   const shareName = deploymentShareName(config);

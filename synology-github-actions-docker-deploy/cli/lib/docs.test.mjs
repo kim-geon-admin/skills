@@ -13,6 +13,8 @@ test('user-facing documents explain configurable routes and credentials', () => 
     assert.match(document, /NAS 내부 IP/);
     assert.match(document, /실제 NAS .*폴더.*입력|NAS 배포 폴더.*사용자/);
     assert.match(document, /배포 계정[\s\S]*(다시|재)[\s\S]*(검사|점검|실행)/);
+    assert.match(document, /신규 배포 계정/);
+    assert.match(document, /administrators[\s\S]*homes[\s\S]*(권한|읽기 전용)/);
     assert.match(document, /\.env[\s\S]*(DSM 관리자 비밀번호|개인 키|비밀 열쇠)|DSM 관리자 비밀번호[\s\S]*\.env/);
   }
 });
