@@ -2,10 +2,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { askNasPassword } from './ask.mjs';
+import { deploymentAccountGuide, replaceDeploymentAccount, validateDeploymentUserName } from './prepare.mjs';
 import {
-  ZERO_TAG, capture, deployKeyProbe, keyPathOf, knownHostsPath, loadConfig, nasDir, remote, run, shellQuote, usesAdminKey
+  ZERO_TAG, capture, deployKeyProbe, keyPathOf, knownHostsPath, loadConfig, nasDir, remote, run, saveConfig, shellQuote, usesAdminKey
 } from './core.mjs';
-import { badItem, bold, confirm, cyan, detail, dim, heading, note, okItem, panel, skipItem, warnItem } from './ui.mjs';
+import { ask, badItem, bold, confirm, cyan, detail, dim, heading, note, okItem, panel, skipItem, warnItem } from './ui.mjs';
 
 const authorizedLine = (config, publicKey) =>
   `restrict,command="${nasDir(config)}/bin/deploy-gate.sh" ${publicKey.replace(/\r/g, '').trim()}`;
@@ -15,6 +16,22 @@ export function keySummary(config) {
     `비밀 열쇠: ${keyPathOf(config)}`,
     `NAS 배포 계정: ${config.nas.deployUser} (${config.nas.host}:${config.nas.port})`
   ].join('\n');
+}
+
+export async function chooseDeploymentAccount(rl, config) {
+  if (await confirm(rl, `${config.nas.deployUser} 계정에 등록할까요?`, true)) return config;
+  if (!(await confirm(rl, '기존 계정 대신 신규 배포 계정을 생성하시겠습니까?', true))) return null;
+
+  const newUser = validateDeploymentUserName(await ask(rl, '신규 배포 계정 ID', 'gh-deploy-new'));
+  if (newUser === config.nas.deployUser) {
+    note('기존 계정과 다른 신규 계정 ID를 입력해 주세요.');
+    return null;
+  }
+
+  const nextConfig = replaceDeploymentAccount(config, newUser);
+  panel('신규 배포 계정 등록', deploymentAccountGuide(nextConfig, newUser).split('\n'));
+  if (!(await confirm(rl, `DSM에서 ${newUser} 계정을 생성하고 권한을 등록했나요?`, true))) return null;
+  return nextConfig;
 }
 
 function ensureKeyPair(config) {
@@ -50,7 +67,7 @@ function saveKnownHosts(config, hostKey) {
 }
 
 export async function keyCommand(rl) {
-  const config = loadConfig();
+  let config = loadConfig();
   panel('key - 배포용 열쇠 만들기', [
     '1) 내 컴퓨터에 열쇠 한 쌍을 만듭니다 (비밀 열쇠 / 공개 열쇠)',
     `2) 공개 열쇠를 NAS의 ${config.nas.deployUser} 계정에 등록합니다`,
@@ -63,14 +80,23 @@ export async function keyCommand(rl) {
   heading('내 컴퓨터');
   const keyPath = ensureKeyPair(config);
   const publicKey = fs.readFileSync(`${keyPath}.pub`, 'utf8');
-  const line = authorizedLine(config, publicKey);
+  let line = authorizedLine(config, publicKey);
   detail('NAS에 등록할 내용 (앞부분만 표시):');
   console.log(`  ${dim(line.slice(0, 96))}${line.length > 96 ? dim(' ...') : ''}`);
 
   heading('NAS에 등록');
-  if (!(await confirm(rl, `${config.nas.deployUser} 계정에 등록할까요?`, true))) {
+  const selectedConfig = await chooseDeploymentAccount(rl, config);
+  if (!selectedConfig) {
     skipItem('등록을 건너뛰었습니다');
     return;
+  }
+  if (selectedConfig !== config) {
+    config = selectedConfig;
+    saveConfig(config);
+    line = authorizedLine(config, publicKey);
+    okItem(`신규 배포 계정 ${config.nas.deployUser} 설정을 저장했습니다`);
+    detail('새 계정에 등록할 공개 키:');
+    console.log(`  ${dim(line.slice(0, 96))}${line.length > 96 ? dim(' ...') : ''}`);
   }
   const password = await askNasPassword(rl, config, { reason: '배포 계정의 열쇠 파일을 만들기 위해' });
   const home = `/var/services/homes/${config.nas.deployUser}`;

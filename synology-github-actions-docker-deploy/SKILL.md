@@ -111,6 +111,8 @@ Spring/Tomcat, `requirements.txt` → Python, `go.mod` → Go, `index.html` → 
 
 `deploy.config.json`이 있으면 `init`이 저장된 프로젝트·NAS·계정·폴더 값을 먼저 보여주고 사용 여부를 묻습니다. 사용하면 저장된 설정으로 진행하고, 사용하지 않으면 설정값을 다시 입력받습니다. 재입력 중 Enter를 누르면 해당 항목의 기존 값을 유지합니다.
 
+`nas-deploy key`에서 기존 배포 계정 등록을 거절해도 바로 건너뛰지 않습니다. 신규 계정 생성 여부와 계정 ID를 물은 뒤 DSM의 `administrators`, `homes`, 배포 공유 폴더 권한 등록을 안내하고, 확인되면 새 계정으로 공개 키 등록을 계속합니다.
+
 ### 여러 프로젝트에서 쓰기
 
 CLI는 특정 프로젝트에 묶이지 않는다. **실행한 폴더의 설정**(`infra/synology/deploy.config.json`)을 읽으므로,

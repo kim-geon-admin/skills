@@ -20,6 +20,7 @@ test('user-facing documents explain configurable routes and credentials', () => 
     assert.match(document, /저장된[\s\S]*먼저 보여주고/);
     assert.match(document, /다시 입력/);
     assert.match(document, /Enter/);
+    assert.match(document, /nas-deploy key[\s\S]*신규 계정/);
     assert.match(document, /\.env[\s\S]*(DSM 관리자 비밀번호|개인 키|비밀 열쇠)|DSM 관리자 비밀번호[\s\S]*\.env/);
   }
 });
