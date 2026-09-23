@@ -1,17 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { buildEnv, configurationSummary, connectionRoute, normalizePublicEndpoint, routeExamples, validateDeploymentConfig, withDefaults } from './init.mjs';
 
 test('accepts a port in the external URL without duplicating it in the route', () => {
-  assert.deepEqual(normalizePublicEndpoint('https://nayaguny.synology.me:1001', 443), {
-    publicUrl: 'https://nayaguny.synology.me',
+  assert.deepEqual(normalizePublicEndpoint('https://example.synology.me:1001', 443), {
+    publicUrl: 'https://example.synology.me',
     publicPort: 1001
   });
 
   const config = withDefaults({
     project: 'demo',
     owner: 'owner',
-    network: { mode: 'reverse-proxy', publicUrl: 'https://nayaguny.synology.me:1001' }
+    network: { mode: 'reverse-proxy', publicUrl: 'https://example.synology.me:1001' }
   });
   assert.equal(config.network.publicPort, 1001);
   assert.doesNotMatch(connectionRoute(config), /1001:443/);
@@ -64,6 +65,7 @@ test('records the Synology internal IP route without an external URL', () => {
 test('does not assume a NAS directory for a new configuration', () => {
   const config = withDefaults({ project: 'demo', owner: 'owner' });
   assert.equal(config.nas.dir, '');
+  assert.equal(config.nas.port, 0);
   assert.throws(() => validateDeploymentConfig(config), /NAS 배포 폴더/);
 });
 
@@ -94,4 +96,21 @@ test('rejects generic placeholders used as NAS values', () => {
     keyPath: '~/.ssh/demo_deploy',
     nas: { host: '나의 도메인', adminUser: 'admin', deployUser: 'gh-deploy', dir: '<NAS 배포 폴더>' }
   })), /실제 값/);
+});
+
+test('rejects a missing or invalid SSH port', () => {
+  const base = {
+    project: 'demo',
+    owner: 'owner',
+    keyPath: '~/.ssh/demo_deploy',
+    nas: { host: 'nas.internal', adminUser: 'admin', deployUser: 'gh-deploy', dir: '/volume2/apps/demo' }
+  };
+  assert.throws(() => validateDeploymentConfig(withDefaults(base)), /SSH 포트/);
+  assert.throws(() => validateDeploymentConfig(withDefaults({ ...base, nas: { ...base.nas, port: 70000 } })), /SSH 포트/);
+});
+
+test('does not embed a project-specific NAS endpoint in init prompts', () => {
+  const source = fs.readFileSync(new URL('./init.mjs', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /nayaguny\.synology\.me/);
+  assert.doesNotMatch(source, /2233/);
 });

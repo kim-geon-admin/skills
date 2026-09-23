@@ -153,6 +153,10 @@ export function validateDeploymentConfig(config) {
     if (!String(value ?? '').trim()) throw new Error(`${label}을(를) 입력해야 합니다.`);
     if (isPlaceholder(value)) throw new Error(`${label}에 실제 값을 입력해야 합니다.`);
   }
+  const port = Number(config.nas?.port);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('SSH 포트는 1부터 65535 사이의 숫자로 입력해야 합니다.');
+  }
   return config;
 }
 
@@ -236,7 +240,7 @@ async function askConfig(rl, previous) {
   let publicPort = 443;
   let bindHost = '';
   if (mode === 'reverse-proxy') {
-    const publicUrlInput = await ask(rl, '외부 URL/호스트 (예: https://nayaguny.synology.me:1001)', previous?.network?.publicUrl ?? '');
+    const publicUrlInput = await ask(rl, '외부 URL/호스트 (예: https://example.com:443)', previous?.network?.publicUrl ?? '');
     const endpoint = normalizePublicEndpoint(publicUrlInput, previous?.network?.publicPort ?? 443);
     publicUrl = endpoint.publicUrl;
     publicPort = Number(await ask(rl, '외부 포트 (URL에 포트가 있으면 Enter로 유지)', String(endpoint.publicPort)));
@@ -272,7 +276,9 @@ async function askConfig(rl, previous) {
   heading('7. NAS 접속 정보');
   detail('GitHub Actions와 이 도구가 접속할 주소입니다.');
   const host = await ask(rl, 'NAS 주소', previous?.nas?.host ?? '');
-  const port = await ask(rl, 'SSH 포트', String(previous?.nas?.port ?? 22));
+  const portInput = await ask(rl, 'SSH 포트 (예: 22)', previous?.nas?.port ? String(previous.nas.port) : '');
+  const port = Number(portInput);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('SSH 포트는 1부터 65535 사이의 숫자로 입력해야 합니다.');
   detail('NAS에 SSH로 들어갈 때 쓰는 본인 DSM 관리자 계정입니다.');
   const adminUser = await ask(rl, 'DSM 관리자 계정', previous?.nas?.adminUser ?? '');
   detail('배포 전용 계정입니다. 이 계정의 키는 배포 명령 하나만 실행할 수 있습니다.');
@@ -335,7 +341,7 @@ export function withDefaults(input) {
     test: input.test ?? [],
     nas: {
       host: input.nas?.host ?? '',
-      port: Number(input.nas?.port ?? 22),
+      port: Number(input.nas?.port ?? 0),
       adminUser: input.nas?.adminUser ?? '',
       deployUser: input.nas?.deployUser ?? '',
       dir: input.nas?.dir ?? '',
