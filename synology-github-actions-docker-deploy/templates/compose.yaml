@@ -23,6 +23,9 @@ services:
       - "${HTTP_BIND:-127.0.0.1:__HOST_PORT__}:__CONTAINER_PORT__"
     environment:
       - PORT=__CONTAINER_PORT__
+    # 앱 설정(관리자 비밀번호, API 키 등)은 NAS의 .env 에만 둔다(git 제외). 이 줄이 없으면 컨테이너가 못 읽는다.
+    env_file:
+      - .env
     volumes:
       - ${DATA_DIR:?set DATA_DIR in .env}:/data
 __HEALTHCHECK__

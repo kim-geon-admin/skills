@@ -77,6 +77,34 @@ export const imagePrefix = (config) => `ghcr.io/${config.owner}/${config.project
 export const nasDir = (config) => config.nas.dir ?? `/volume1/docker/${config.project}`;
 export const keyPathOf = (config) => expandHome(config.keyPath);
 export const adminKeyPath = (config) => expandHome(config.nas.adminKey ?? `~/.ssh/${config.project}_admin`);
+// 데이터 폴더를 컨테이너가 쓸 수 있게 만든다.
+// 시놀로지는 docker 공유 폴더 아래 새 폴더에 ACL(+)을 물려주고, 이 ACL이 chmod·chown 보다 우선해
+// 소유자에게서도 쓰기 권한을 뺀다(dr-xr-xr-x+). 그러면 root가 아닌 사용자로 도는 앱(예: node 이미지의
+// uid 1000)이 SQLite 파일을 만들지 못해 SQLITE_CANTOPEN 으로 죽는다. ACL을 지우고 소유자를 맞춘다.
+export function dataFolderCommands(config, dir) {
+  const data = `${dir}/data`;
+  return [
+    `/usr/syno/bin/synoacltool -del ${data} >/dev/null 2>&1 || true`,
+    ...(config.dataOwner ? [`chown ${config.dataOwner} ${data}`] : []),
+    `chmod 755 ${data}`
+  ];
+}
+
+// 데이터 폴더 상태: "uid:gid:모드:ACL표시". ACL이 있으면 ls 권한 문자열 끝이 + 이고, 없으면 공백이라 값을 읽을 때 빈 문자열이 된다
+export const dataFolderProbe = (dir) =>
+  `echo "DATA=$(stat -c %u:%g:%a ${dir}/data 2>/dev/null || echo none):$(ls -ld ${dir}/data 2>/dev/null | cut -c11)"`;
+
+// DATA 값을 읽어 문제를 설명한다. 문제가 없으면 null
+export function dataFolderProblem(config, probe) {
+  if (!probe || probe.startsWith('none')) return '데이터 폴더가 없습니다';
+  const [uid, gid, mode, acl] = probe.split(':');
+  if (acl === '+') return '데이터 폴더에 시놀로지 ACL(+)이 있어 컨테이너가 쓰지 못할 수 있습니다';
+  const owner = config.dataOwner || '0:0';
+  if (`${uid}:${gid}` !== owner) return `데이터 폴더 소유자가 ${uid}:${gid} 입니다 (필요: ${owner})`;
+  if (mode !== '755') return `데이터 폴더 권한이 ${mode} 입니다 (필요: 755)`;
+  return null;
+}
+
 export const knownHostsPath = (config) => path.join(path.dirname(keyPathOf(config)), `${config.project}_known_hosts`);
 export const adminTarget = (config) => `${config.nas.adminUser}@${config.nas.host}`;
 export const deployTarget = (config) => `${config.nas.deployUser}@${config.nas.host}`;

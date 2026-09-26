@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { askNasPassword } from './ask.mjs';
 import {
   COMPOSE_PATH, DEPLOY_SCRIPT_PATH, ENV_PATH, GATE_SCRIPT_PATH, UserError,
+  dataFolderCommands, dataFolderProbe, dataFolderProblem,
   filePayload, loadConfig, nasDir, readIfExists, remote, remoteStageFor, shellQuote, usesAdminKey
 } from './core.mjs';
 import { badItem, bold, confirm, cyan, detail, dim, heading, note, okItem, panel, skipItem, warnItem } from './ui.mjs';
@@ -22,6 +23,7 @@ export function buildInstallScript(config, files, envText) {
   const privileged = [
     'set -e',
     `mkdir -p ${dir}/bin ${dir}/data ${dir}/.unused`,
+    ...dataFolderCommands(config, dir),
     `install -o root -g root -m 700 ${stage}/deploy.sh ${dir}/bin/deploy.sh`,
     `install -o root -g root -m 755 ${stage}/deploy-gate.sh ${dir}/bin/deploy-gate.sh`,
     `install -o root -g root -m 644 ${stage}/compose.yaml ${dir}/compose.yaml`,
@@ -37,7 +39,8 @@ export function buildInstallScript(config, files, envText) {
     `if /usr/local/bin/docker-compose version >/dev/null 2>&1; then echo "COMPOSE=ok"; elif /usr/local/bin/docker compose version >/dev/null 2>&1; then echo "COMPOSE=ok"; else echo "COMPOSE=missing"; fi`,
     `echo "GATE=$(stat -c %a ${dir}/bin/deploy-gate.sh)"`,
     `echo "SCRIPT=$(stat -c %a ${dir}/bin/deploy.sh)"`,
-    `echo "ENVMODE=$(stat -c %a ${dir}/.env 2>/dev/null || echo none)"`
+    `echo "ENVMODE=$(stat -c %a ${dir}/.env 2>/dev/null || echo none)"`,
+    dataFolderProbe(dir)
   ].join('\n');
 
   return [
@@ -60,6 +63,7 @@ export async function nasCommand(rl) {
     '',
     '1) 배포 스크립트, compose 파일, .env 를 NAS로 보냅니다',
     '2) 관리자(root) 소유로 제자리에 놓고 권한을 맞춥니다',
+    `   데이터 폴더는 컨테이너 사용자(${config.dataOwner || 'root'})가 쓸 수 있게 시놀로지 ACL을 지우고 소유자를 맞춥니다`,
     '3) 배포 계정이 배포 스크립트만 관리자 권한으로 실행하도록 규칙을 만듭니다',
     '',
     envText ? '.env 안의 윈도우 줄바꿈과 붙여넣기 제어문자는 자동으로 정리합니다.' : '.env 파일이 없어 이번에는 건너뜁니다.',
@@ -94,6 +98,12 @@ export async function nasCommand(rl) {
   }
   if (value('GATE') === '755' && value('SCRIPT') === '700') okItem('스크립트 권한이 올바릅니다', 'gate 755 / deploy 700');
   else warnItem('스크립트 권한을 확인해 주세요', `gate=${value('GATE')} deploy=${value('SCRIPT')}`);
+  const dataProblem = dataFolderProblem(config, value('DATA'));
+  if (!dataProblem) okItem('데이터 폴더를 컨테이너가 쓸 수 있습니다', `${config.dataOwner || 'root'} / 755 / ACL 없음`);
+  else {
+    badItem(dataProblem);
+    note(`NAS에서 확인: ls -ld ${dir}/data  (끝에 + 가 없고 소유자가 ${config.dataOwner || '0:0'} 이어야 합니다)`);
+  }
   if (envText !== null) {
     if (value('ENVMODE') === '600') okItem('.env 를 올렸습니다', '관리자만 읽을 수 있습니다');
     else warnItem('.env 권한을 확인해 주세요', `현재 ${value('ENVMODE')}`);

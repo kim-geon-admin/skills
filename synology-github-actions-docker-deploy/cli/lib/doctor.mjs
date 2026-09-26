@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { askNasPassword } from './ask.mjs';
 import {
   COMPOSE_PATH, CONFIG_PATH, DEPLOY_SCRIPT_PATH, ENV_PATH, GATE_SCRIPT_PATH, SECRET_NAMES, WORKFLOW_PATH, ZERO_TAG,
-  capture, deployKeyProbe, has, keyPathOf, knownHostsPath, loadConfig, nasDir, readIfExists, remote, usesAdminKey
+  capture, dataFolderProbe, dataFolderProblem, deployKeyProbe, has, keyPathOf, knownHostsPath, loadConfig, nasDir, readIfExists, remote, usesAdminKey
 } from './core.mjs';
 import { githubState } from './github.mjs';
 import { repoViewArgs, secretListArgs } from './secrets.mjs';
@@ -22,7 +22,8 @@ export function buildNasDoctorScript(config) {
     `echo "SUDO=$(sudo -n -l -U ${config.nas.deployUser} 2>/dev/null | grep -c ${JSON.stringify(`${dir}/bin/deploy.sh`)})"`,
     `echo "DISK=$(df -Pm ${dir} 2>/dev/null | awk 'NR==2{print $4}')"`,
     `echo "CURRENT=$(sudo -n cat ${dir}/state/current-tag 2>/dev/null || echo none)"`,
-    `echo "RUNNING=$(sudo -n /usr/local/bin/docker ps --filter "label=com.docker.compose.project=${config.project}" -q 2>/dev/null | wc -l)"`
+    `echo "RUNNING=$(sudo -n /usr/local/bin/docker ps --filter "label=com.docker.compose.project=${config.project}" -q 2>/dev/null | wc -l)"`,
+    dataFolderProbe(dir)
   ].join('\n');
 }
 
@@ -140,6 +141,9 @@ export async function doctorCommand(rl, options = {}) {
     else if (value('ENVMODE') === 'none') soft('NAS에 .env 가 없습니다', '', '앱에 설정이 필요하면 "nas-deploy env" 로 올리세요.');
     else soft('.env 권한이 600이 아닙니다', `현재 ${value('ENVMODE')}`);
     if (value('ENVCTRL') !== '0') soft('.env 안에 이상한 제어문자가 있습니다', '', '"nas-deploy env" 로 다시 올리면 정리됩니다.');
+    const dataProblem = dataFolderProblem(config, value('DATA'));
+    if (!dataProblem) okItem('데이터 폴더를 컨테이너가 쓸 수 있습니다', `${config.dataOwner || 'root'} / 755`);
+    else fail(dataProblem, '', '"nas-deploy nas" 를 다시 실행하면 ACL을 지우고 소유자를 맞춥니다.');
     if (Number(value('SUDO') ?? 0) > 0) okItem('배포 계정 권한 규칙 있음');
     else fail('배포 계정 권한 규칙이 없습니다', '', '"nas-deploy nas" 를 실행하세요.');
     if (value('AKREAD') === 'ok') okItem('배포 계정이 자기 열쇠 파일을 읽을 수 있습니다');

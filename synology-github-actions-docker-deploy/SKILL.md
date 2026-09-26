@@ -29,6 +29,7 @@ GitHub Actions ──ssh(키: 강제 명령)──▶ deploy-gate.sh (gh-deploy 
 | `templates/gitattributes` | `*.sh eol=lf` (Windows `core.autocrlf=true` 대비) |
 | `cli/nas-deploy.mjs` | 설정·설치·점검을 대신 해 주는 CLI (Node 20+, 의존성 없음). 아래 "CLI로 진행하기" 참고 |
 | `scripts/test-deploy.sh` | 모의 docker로 배포 시나리오 15~16개 검증 (Docker 필요) |
+| `scripts/test-cli.mjs` | CLI 규칙 검사: `.gitattributes` 합치기, 데이터 폴더 소유자·ACL, `init` 결과 (`node --test scripts/test-cli.mjs`) |
 | `references/nas-setup.md` | 사용자와 함께 진행하는 NAS·GitHub 설정 단계 (한 단계씩 안내용) |
 | `references/security-review.md` | 기존 NAS 배포 워크플로 검토 체크리스트 |
 
@@ -43,6 +44,14 @@ nas-deploy help
 
 CLI를 설치하지 않고 스킬 폴더를 직접 clone해서 쓰는 경우에는
 `node ~/.claude/skills/synology-github-actions-docker-deploy/cli/nas-deploy.mjs help`로 실행할 수도 있다.
+
+**PowerShell 사용자**(clone 방식): PowerShell은 `node`에 넘기는 인자 안의 `~`를 바꿔 주지 않는다(`Cannot find module '…\~\.claude\…'`).
+`$HOME`을 쓰거나, 창마다 함수를 한 번 만들어 둔다.
+
+```powershell
+function nas-deploy { node "$HOME\.claude\skills\synology-github-actions-docker-deploy\cli\nas-deploy.mjs" @args }
+nas-deploy doctor
+```
 
 처음 설치하는 NAS라면 `init` 다음에 **`prepare`** 를 먼저 돌려 DSM 준비를 끝내야 `key` 가 성공한다.
 
@@ -68,10 +77,10 @@ infra/synology/                나머지는 이 폴더 하나에 모임 (NAS_DEP
   compose.yaml                 NAS에서 컨테이너를 띄우는 설정
   deploy.sh                    NAS에서 교체·헬스체크·롤백
   deploy-gate.sh               배포 열쇠가 실행할 수 있는 유일한 명령
-  .env                         NAS 전용 설정값 (git 제외)
+  .env                         NAS 전용 설정값 (git 제외). compose 가 env_file 로 컨테이너에 넘긴다
   deploy.config.json           CLI 설정 (git 제외)
 Dockerfile                     없을 때만, 프로젝트 종류에 맞는 초안 생성 (경로는 질문에서 지정)
-.gitattributes                 *.sh eol=lf
+.gitattributes                 *.sh eol=lf (기존 파일이 있으면 지우지 않고 없는 줄만 붙임)
 .gitignore                     .env, deploy.config.json 항목 추가
 ```
 
@@ -103,6 +112,9 @@ Spring/Tomcat, `requirements.txt` → Python, `go.mod` → Go, `index.html` → 
 - **linux/amd64 전용.** 워크플로가 amd64로 빌드한다. ARM 기반 Synology(예: 일부 J 시리즈)는 `platforms` 수정 필요.
 - **한 프로젝트 = compose 스택 하나.** 서비스를 여러 개 둘 수 있지만, 두 번째 서비스부터는 compose에 볼륨·환경 변수를 직접 적어야 한다.
 - **상태 확인 명령은 이미지 안에 있어야 한다.** 없는 명령을 고르면 컨테이너가 계속 "이상"으로 보여 롤백된다. 확실하지 않으면 `none`.
+- **root가 아닌 사용자로 도는 이미지는 데이터 폴더 소유자(`dataOwner`)가 필요하다.** `init`이 Dockerfile의 마지막
+  `USER`로 추측한다(`node` → `1000:1000`). `nas`가 데이터 폴더의 시놀로지 ACL을 지우고 그 소유자로 맞춘다.
+  틀리면 SQLite 같은 파일을 못 만들어 헬스 체크에서 죽는다(아래 시행착오 표).
 - **`read_only: true`가 기본.** 런타임이 쓰기를 요구하면(nginx 캐시, PHP 세션, 로그 파일) 해당 경로를 tmpfs로 열거나 볼륨을 붙여야 한다.
 - **레지스트리는 GHCR 고정.** Docker Hub 등 다른 레지스트리는 워크플로와 배포 스크립트를 손봐야 한다.
 - **빌드는 GitHub 러너에서 한다.** 유료 러너 없이 큰 이미지를 만들면 시간이 오래 걸린다(캐시는 켜져 있음).
@@ -182,6 +194,7 @@ CLI를 전역 설치했다면 별칭 없이 모든 프로젝트에서 `nas-deplo
    | `__DOCKERFILE__` | 서비스별 Dockerfile 경로 | `infra/docker/${{ matrix.service }}.Dockerfile` |
    | `BACKUP_FILES` | 교체 전 복사할 호스트 파일 | `(/실제/NAS배포폴더/data/app.sqlite)` |
    | `__HOST_PORT__` | NAS loopback 포트 (역방향 프록시 대상) | `3100` |
+   | `dataOwner` | 컨테이너 사용자 uid:gid. 데이터 폴더 소유자가 된다. root면 빈 값 | `1000:1000` (node 이미지) |
 
 3. **템플릿 적용**: `templates/*`를 프로젝트의 `.github/workflows/deploy.yml`, `infra/synology/`, `.gitattributes`로
    복사하고 토큰 치환. `test` job은 프로젝트의 실제 검사 명령으로 교체.
@@ -190,7 +203,8 @@ CLI를 전역 설치했다면 별칭 없이 모든 프로젝트에서 `nas-deplo
    for r in actions/checkout actions/setup-node pnpm/action-setup docker/setup-buildx-action docker/login-action docker/build-push-action; do
      t=$(gh api repos/$r/releases/latest --jq .tag_name); echo "$r $t $(gh api repos/$r/commits/$t --jq .sha)"; done
    ```
-5. **검증**: `bash scripts/test-deploy.sh <프로젝트 deploy.sh> <deploy-gate.sh>` 전부 PASS,
+5. **검증**: `node --test scripts/test-cli.mjs` 통과(CLI를 고쳤을 때),
+   `bash scripts/test-deploy.sh <프로젝트 deploy.sh> <deploy-gate.sh>` 전부 PASS,
    `IMAGE_TAG=<40자> docker compose --env-file <예시 env> -f infra/synology/compose.yaml config -q` 통과.
 6. **NAS·GitHub 설정**: `references/nas-setup.md` 순서대로 **한 단계씩** 안내한다. 안내할 때마다:
    - 코드 블록마다 **`실행 위치 | 실행 방식`** 라벨을 붙인다.
@@ -235,6 +249,10 @@ CLI를 전역 설치했다면 별칭 없이 모든 프로젝트에서 `nas-deplo
 | Caddy/nginx 컨테이너가 `port is already allocated` | DSM이 80/443 사용 | DSM 역방향 프록시 → `localhost:<포트>` |
 | worker 생성 실패(`/dev/dri` 없음) | Intel 내장 GPU 없는 모델 | 사전 점검 `ls -l /dev/dri`, 없으면 compose의 `devices` 제거 |
 | `scp` 실패 | DSM SFTP/scp 설정 | `scp -O`, 안 되면 SFTP 활성화 또는 File Station 업로드 후 `sudo mv` |
+| 첫 배포에서 `app reported unhealthy`, 로그에 `SQLITE_CANTOPEN` / `unable to open database file` | 데이터 폴더가 `dr-xr-xr-x+`: 소유자(1000)는 맞지만 docker 공유 폴더에서 물려받은 **시놀로지 ACL(+)**이 쓰기를 막음. `chown`만으로는 안 됨 | `dataOwner` 설정 후 `nas` 다시 실행(ACL 삭제+chown+755). 수동: `sudo /usr/syno/bin/synoacltool -del …/data; sudo chmod 755 …/data`. 확인: `ls -ld …/data`가 `drwxr-xr-x 1000 1000`, 끝에 `+` 없음 |
+| 컨테이너에서 앱 설정(비밀번호, API 키)이 비어 있음 | 예전 compose 템플릿에 `env_file`이 없어 NAS `.env`가 compose 변수로만 쓰이고 컨테이너에는 안 넘어감 | 템플릿에 `env_file: [.env]` 추가됨. 예전 프로젝트는 compose에 직접 추가 |
+| `init` 후 `.gitattributes`의 기존 규칙(`* text=auto eol=lf`, `*.png binary`)이 사라짐 | 예전 `init`이 파일을 템플릿으로 덮어씀 | 지금은 없는 줄만 붙임. 예전 버전으로 만든 저장소는 `git diff .gitattributes` 확인 |
+| PowerShell에서 `Cannot find module '…\~\.claude\…'` | PowerShell은 `node` 인자의 `~`를 확장하지 않음 | `node "$HOME\.claude\…\nas-deploy.mjs"` 또는 위의 `nas-deploy` 함수 |
 | PowerShell에서 `<` 리다이렉트/`$(…)` 불가, `>`는 BOM | 셸 차이 | Secret 등록·테스트는 Git Bash로 |
 | 사용자가 "파워셸? NAS?" 하고 어느 창에서 실행할지 되물음 | 안내에 실행 위치·방식이 없었음 | 모든 블록에 `실행 위치 \| 실행 방식` 라벨 (위 6번) |
 

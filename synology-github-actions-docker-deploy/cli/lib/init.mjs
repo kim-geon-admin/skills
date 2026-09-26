@@ -20,6 +20,30 @@ const ACTION_REPOS = [
 
 const template = (name) => fs.readFileSync(path.join(TEMPLATE_DIR, name), 'utf8');
 
+// 기존 .gitattributes 를 지우지 않고, 템플릿 줄 중 없는 것만 뒤에 붙입니다.
+export function mergeGitattributes(existing, addition) {
+  if (!existing) return addition;
+  const have = new Set(existing.split(/\r?\n/).map((line) => line.trim()));
+  const missing = addition.split(/\r?\n/).filter((line) => line.trim() && !have.has(line.trim()));
+  if (!missing.length) return existing;
+  return `${existing.replace(/\s*$/, '')}\n${missing.join('\n')}\n`;
+}
+
+// 컨테이너가 도는 사용자(uid:gid)를 Dockerfile 의 마지막 USER 줄로 추측합니다.
+// 데이터 폴더를 이 사용자 소유로 만들어야 SQLite 같은 파일을 쓸 수 있습니다. root 면 빈 값입니다.
+export function detectDataOwner(dockerfilePath) {
+  const text = readIfExists(dockerfilePath);
+  if (!text) return '';
+  const users = [...text.matchAll(/^\s*USER\s+(\S+)/gim)].map((m) => m[1]);
+  const user = users.at(-1);
+  if (!user || user === 'root' || user === '0' || user === '0:0') return '';
+  if (user === 'node') return '1000:1000'; // 공식 node 이미지
+  if (user === 'nginx') return '101:101'; // 공식 nginx 이미지
+  if (/^\d+$/.test(user)) return `${user}:${user}`;
+  if (/^\d+:\d+$/.test(user)) return user;
+  return '';
+}
+
 function buildWorkflow(config) {
   let text = template('deploy.yml');
   text = text.replaceAll('ghcr.io/__GHCR_OWNER__/__PROJECT__', imagePrefix(config));
@@ -314,9 +338,15 @@ async function askConfig(rl, previous) {
   const backupFiles = (await ask(rl, '백업할 파일(쉼표로 구분)', (previous?.backupFiles ?? []).join(', ')))
     .split(',').map((file) => file.trim()).filter(Boolean);
 
+  heading('9. 데이터 폴더 소유자');
+  detail('컨테이너 안에서 앱이 도는 사용자(uid:gid)입니다. 데이터 폴더를 이 사용자 소유로 만들어야 파일을 쓸 수 있습니다.');
+  detail('Dockerfile 의 USER 줄로 추측했습니다. root 로 돌면 비워 두세요. (node 이미지 = 1000:1000)');
+  const dataOwner = await ask(rl, '데이터 폴더 소유자', previous?.dataOwner ?? detectDataOwner(dockerfile.replace(/^\.\//, '')));
+
   return {
     project,
     owner,
+    dataOwner: /^\d+:\d+$/.test(dataOwner.trim()) ? dataOwner.trim() : '',
     projectType: typeMeta ? projectType : '',
     services: serviceNames.map((name) => ({ name })),
     dockerfile,
@@ -367,7 +397,8 @@ export function withDefaults(input) {
       adminKey: input.nas?.adminKey ?? null
     },
     keyPath: input.keyPath ?? `~/.ssh/${project}_deploy`,
-    backupFiles: input.backupFiles ?? []
+    backupFiles: input.backupFiles ?? [],
+    dataOwner: input.dataOwner ?? detectDataOwner((input.dockerfile ?? './Dockerfile').replace(/^\.\//, ''))
   };
 }
 
@@ -414,20 +445,21 @@ export async function initCommand(rl, options = {}) {
     [COMPOSE_PATH, buildCompose(config)],
     [DEPLOY_SCRIPT_PATH, buildDeployScript(config)],
     [GATE_SCRIPT_PATH, buildGate(config)],
-    ['.gitattributes', template('gitattributes')]
+    ['.gitattributes', mergeGitattributes(readIfExists('.gitattributes'), template('gitattributes')), { additive: true }]
   ];
-  for (const [file, content] of files) {
+  for (const [file, content, { additive = false } = {}] of files) {
     const existing = readIfExists(file);
     if (existing === content) {
       skipItem(`${file} (이미 같은 내용)`);
       continue;
     }
-    if (existing && !options.yes && !(await confirm(rl, `${file} 파일이 이미 있습니다. 덮어쓸까요?`, false))) {
+    // .gitattributes 는 기존 줄을 남기고 필요한 줄만 붙이므로 묻지 않습니다.
+    if (existing && !additive && !options.yes && !(await confirm(rl, `${file} 파일이 이미 있습니다. 덮어쓸까요?`, false))) {
       skipItem(`${file} (그대로 둠)`);
       continue;
     }
     writeFile(file, content);
-    okItem(`${file} ${existing ? '수정함' : '새로 만듦'}`);
+    okItem(`${file} ${existing ? (additive ? '필요한 줄 추가함' : '수정함') : '새로 만듦'}`);
   }
 
   // Dockerfile 은 프로젝트마다 다르므로, 없을 때만 종류에 맞는 초안을 만들어 줍니다.
